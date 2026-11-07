@@ -32,6 +32,13 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
+// === ХЕЛПЕР ДЛЯ ЛОКАЛЬНОЙ ДАТЫ ===
+function getLocalDateString(date = new Date()) {
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+}
+
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -116,7 +123,7 @@ function nextThursday() {
     const day = d.getDay();
     const daysUntilThu = (4 - day + 7) % 7 || 7;
     d.setDate(d.getDate() + daysUntilThu);
-    return d.toISOString().split('T')[0];
+    return getLocalDateString(d);
 }
 
 async function startNewSeason() {
@@ -981,7 +988,7 @@ async function loadMatchHistory() {
         const tourneyNum = Math.ceil(stageNum / STAGES_PER_TOURNAMENT);
 
         if (match) {
-            const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
+            const dateStr = match.match_date ? new Date(match.match_date + 'T00:00:00').toLocaleDateString('ru-RU') : 'Дата не указана';
             const cScore = match.clan_score || 0;
             const eScore = match.enemy_points || 0;
             const opponent = match.enemy_name || 'Неизвестный враг';
@@ -1032,7 +1039,7 @@ async function loadMatchHistory() {
 
 async function fillEmptyMatch(stageNum) {
     if (!canEdit()) return;
-    const defaultDate = new Date().toISOString().split('T')[0];
+    const defaultDate = getLocalDateString();
     const date = prompt(`Дата матча для этапа ${stageNum} (ГГГГ-ММ-ДД):`, defaultDate);
     if (date === null) return;
     const cleanDate = (date || '').trim() || null;
@@ -1115,14 +1122,18 @@ async function loadCalendar() {
         return;
     }
 
-    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const now = new Date(); 
+    now.setHours(0, 0, 0, 0);
 
     const grouped = {};
     AppState.upcomingMatches.forEach(m => {
         const key = m.tournament_number ? `tour_${m.tournament_number}` : `m_${m.id}`;
         if (!grouped[key]) grouped[key] = { tour: m.tournament_number, matches: [], isPast: true };
         grouped[key].matches.push(m);
-        if (new Date(m.match_date) >= now) grouped[key].isPast = false;
+        
+        // Сравниваем локальные даты
+        const matchDate = new Date(m.match_date + 'T00:00:00');
+        if (matchDate >= now) grouped[key].isPast = false;
     });
 
     const upcoming = Object.values(grouped).filter(g => !g.isPast);
@@ -1141,8 +1152,9 @@ async function loadCalendar() {
         }
 
         g.matches.forEach(m => {
-            const d = new Date(m.match_date);
-            const daysUntil = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+            const d = new Date(m.match_date + 'T00:00:00');
+            const daysUntil = Math.round((d - now) / (1000 * 60 * 60 * 24));
+            
             let badge = '';
             if (!isPast && daysUntil === 0) badge = ' <span style="color:var(--danger-color); font-weight:bold;">СЕГОДНЯ</span>';
             else if (!isPast && daysUntil === 1) badge = ' <span style="color:var(--accent-color);">ЗАВТРА</span>';
@@ -1195,20 +1207,20 @@ async function addUpcomingMatch() {
     if (!date) return showToast('Укажите дату', 'error');
 
     if (tourNum && !stageNum) {
-        const startDate = new Date(date + 'T00:00:00');
+        // Все 3 этапа на ОДНУ дату
         for (let i = 0; i < 3; i++) {
-            const d = new Date(startDate);
-            d.setDate(d.getDate() + i);
             const globalStage = (parseInt(tourNum) - 1) * 3 + i + 1;
             await supabaseClient.from('upcoming_matches').insert([{
-                match_date: d.toISOString().split('T')[0], match_time: time || null,
-                match_type: 'tournament', notes: notes || null,
+                match_date: date, 
+                match_time: time || null,
+                match_type: 'tournament', 
+                notes: notes || null,
                 tournament_number: parseInt(tourNum),
                 stage_number: globalStage,
                 season_id: AppState.viewingSeason.id
             }]);
         }
-        showToast(`Турнир ${tourNum} добавлен (3 этапа)`, 'success');
+        showToast(`Турнир ${tourNum} добавлен (3 этапа на ${date})`, 'success');
     } else {
         const { error } = await supabaseClient.from('upcoming_matches').insert([{
             match_date: date, match_time: time || null,
@@ -1387,7 +1399,7 @@ async function confirmPhotoUpload() {
 
             if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
                 await supabaseClient.from('clan_matches').upsert({
-                    stage_number: stageNum, match_date: new Date().toISOString().split('T')[0],
+                    stage_number: stageNum, match_date: getLocalDateString(),
                     clan_score: result.clan_score, enemy_points: result.enemy_score,
                     enemy_name: result.enemy_name || 'Неизвестный враг', season_id: sid
                 }, { onConflict: 'season_id, stage_number' });
