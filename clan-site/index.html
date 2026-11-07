@@ -445,9 +445,19 @@
             
             <div class="analytics-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom: 30px;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform: uppercase;">Общая диагностика</h3>
+                
+                <!-- НОВЫЙ БЛОК: ВЫДЕЛЕННЫЙ РЕЙТИНГ -->
+                <div style="display:flex; justify-content:center; margin-bottom:20px; width:100%;">
+                    <div style="background:rgba(255,152,0,0.1); border:2px solid var(--accent-color); border-radius:var(--radius); padding:15px 40px; text-align:center; box-shadow:0 0 15px rgba(255,152,0,0.2);">
+                        <div style="color:var(--accent-color); font-size:0.9em; text-transform:uppercase; letter-spacing:2px; font-weight:bold; margin-bottom:5px;">Текущий рейтинг</div>
+                        <div><strong id="hr-rating" style="color:var(--accent-color); font-size:3em; font-family:'Courier New', monospace; text-shadow:0 0 10px rgba(255,152,0,0.5);">1000</strong></div>
+                    </div>
+                </div>
+
                 <div style="width: 250px; height: 250px;">
                     <canvas id="matchHistoryChart"></canvas>
                 </div>
+                
                 <div id="history-winrate" style="display:flex; gap:25px; flex-wrap:wrap; justify-content:center; margin-top:20px; font-size:1.1em; font-family:'Courier New', monospace;">
                     <div>
                         <div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Победы</div>
@@ -463,11 +473,6 @@
                         <div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Ничьи</div>
                         <div><strong id="hr-draws" style="color:var(--accent-color); font-size:1.4em;">0</strong>
                             <span style="color:var(--text-muted);">(<span id="hr-draws-pct">0%</span>)</span></div>
-                    </div>
-                    <!-- НОВЫЙ БЛОК РЕЙТИНГА -->
-                    <div>
-                        <div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Рейтинг</div>
-                        <div><strong id="hr-rating" style="color:var(--success-color); font-size:1.4em;">0</strong></div>
                     </div>
                     <div>
                         <div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Всего</div>
