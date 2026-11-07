@@ -32,7 +32,7 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// === ХЕЛПЕР ДЛЯ ЛОКАЛЬНОЙ ДАТЫ ===
+// === ХЕЛПЕР ДЛЯ ЛОКАЛЬНОЙ ДАТЫ (ИСПРАВЛЯЕТ ЧАСОВОЙ ПОЯС) ===
 function getLocalDateString(date = new Date()) {
     const offset = date.getTimezoneOffset();
     const localDate = new Date(date.getTime() - (offset * 60 * 1000));
