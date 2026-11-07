@@ -12,7 +12,8 @@ const AppState = {
     activeSeason: null, viewingSeason: null,
 };
 
-let currentEditId = null, isAdmin = false, currentPhotoFile = null;
+let currentEditId = null, isAdmin = false;
+let currentPhotoFiles = []; // <--- Массив для файлов
 let pendingAbsentPlayers = [], currentAbsentStage = null;
 let currentSortColumn = 'kd', currentSortDirection = 'desc';
 let topsSeasonMode = 'all'; 
@@ -23,7 +24,7 @@ const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'ки�
 const TOURNAMENTS_PER_SEASON = 12;
 const STAGES_PER_TOURNAMENT = 3;
 const RATING_CHANGE = 50;
-const START_RATING = 1000; // НОВОЕ: Стартовый рейтинг
+const START_RATING = 1000;
 
 const SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -119,14 +120,6 @@ function switchViewingSeason(seasonId) {
 }
 
 // ==================== НОВЫЙ СЕЗОН ====================
-function nextThursday() {
-    const d = new Date();
-    const day = d.getDay();
-    const daysUntilThu = (4 - day + 7) % 7 || 7;
-    d.setDate(d.getDate() + daysUntilThu);
-    return getLocalDateString(d);
-}
-
 async function startNewSeason() {
     if (!isAdmin) { showToast('Только для админа', 'error'); return; }
 
@@ -964,11 +957,67 @@ function renderComparison() {
     });
 }
 
+// ==================== MVP ТУРНИРОВ ====================
+function renderTournamentMVPs() {
+    const container = document.getElementById('tournament-mvp-container');
+    if (!container) return;
+    
+    // Показываем только завершенные турниры (где есть хотя бы 1 матч)
+    const activeTournaments = AppState.tournaments.filter(t => {
+        const startStage = (t.tournament_number - 1) * STAGES_PER_TOURNAMENT + 1;
+        return AppState.matchStats.some(s => s.stage_number >= startStage && s.stage_number <= startStage + STAGES_PER_TOURNAMENT - 1);
+    });
+
+    if (activeTournaments.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '<h3 style="color:var(--accent-color); text-transform:uppercase; margin-bottom:15px; text-align:center; font-size:1.2em;">👑 MVP по турнирам</h3>';
+    html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:15px; margin-bottom:30px;">';
+
+    activeTournaments.forEach(t => {
+        const startStage = (t.tournament_number - 1) * STAGES_PER_TOURNAMENT + 1;
+        const endStage = t.tournament_number * STAGES_PER_TOURNAMENT;
+        
+        const tStats = AppState.matchStats.filter(s => s.stage_number >= startStage && s.stage_number <= endStage);
+        
+        const playerPoints = {};
+        tStats.forEach(s => {
+            if (!playerPoints[s.player_id]) playerPoints[s.player_id] = 0;
+            playerPoints[s.player_id] += (s.points || 0);
+        });
+
+        let mvpId = null;
+        let maxPoints = -1;
+        for (const [pid, pts] of Object.entries(playerPoints)) {
+            if (pts > maxPoints) { maxPoints = pts; mvpId = parseInt(pid); }
+        }
+
+        if (mvpId) {
+            const p = AppState.players.find(x => x.id === mvpId);
+            if (p) {
+                html += `
+                    <div class="calendar-card" style="border-color:var(--accent-color); background:rgba(255,152,0,0.05); text-align:center;">
+                        <div style="font-size:0.8em; color:var(--text-muted); text-transform:uppercase;">Турнир ${t.tournament_number}</div>
+                        <div style="font-size:1.3em; font-weight:bold; color:var(--text-color); margin:5px 0;">${p.nickname}</div>
+                        <div style="color:var(--success-color); font-weight:bold; font-family:'Courier New', monospace;">${maxPoints} очков</div>
+                    </div>
+                `;
+            }
+        }
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
 // ==================== ИСТОРИЯ ====================
 async function loadMatchHistory() {
     const timeline = document.getElementById('history-timeline');
     if (!timeline) return;
     timeline.innerHTML = '<div style="text-align:center; width:100%;">Загрузка...</div>';
+
+    renderTournamentMVPs(); // <--- Вызов рендера MVP
 
     const matchesByStage = {};
     AppState.matches.forEach(m => { if (m.stage_number) matchesByStage[m.stage_number] = m; });
@@ -979,9 +1028,8 @@ async function loadMatchHistory() {
     if (tCountEl) tCountEl.innerText = Math.ceil(totalStages / STAGES_PER_TOURNAMENT);
     if (sCountEl) sCountEl.innerText = totalStages;
 
-    // === РАСЧЕТ РЕЙТИНГА (СТАРТ 1000) ===
     const sortedMatches = [...AppState.matches].filter(m => m.stage_number).sort((a, b) => a.stage_number - b.stage_number);
-    let currentRating = START_RATING; // Начинаем с 1000
+    let currentRating = START_RATING;
     const matchRatings = {}; 
     
     sortedMatches.forEach(m => {
@@ -998,12 +1046,10 @@ async function loadMatchHistory() {
     const ratingEl = document.getElementById('hr-rating');
     if (ratingEl) {
         ratingEl.innerText = currentRating;
-        // Если больше 1000 — зеленый, меньше — красный, ровно 1000 — оранжевый
         if (currentRating > START_RATING) ratingEl.style.color = 'var(--success-color)';
         else if (currentRating < START_RATING) ratingEl.style.color = 'var(--danger-color)';
         else ratingEl.style.color = 'var(--accent-color)';
     }
-    // =====================================
 
     let wins = 0, losses = 0, draws = 0;
     timeline.innerHTML = '';
@@ -1331,20 +1377,56 @@ async function deleteFine(id) {
     if (confirm('Удалить штраф?')) { await supabaseClient.from('fines').delete().eq('id', id); loadFines(); }
 }
 
-// ==================== ЗАГРУЗКА ФОТО + РАСПОЗНАВАНИЕ ====================
+// ==================== ЗАГРУЗКА ФОТО (МАССОВАЯ) ====================
 function openPhotoModal(input) {
-    const file = input.files[0]; if (!file) return;
-    currentPhotoFile = file;
+    const files = input.files; 
+    if (!files || files.length === 0) return;
+    
+    currentPhotoFiles = Array.from(files);
     document.getElementById('photo-modal').style.display = 'flex';
-    const r = new FileReader(); r.onload = (e) => { document.getElementById('preview-img').src = e.target.result; document.getElementById('photo-preview').style.display = 'block'; };
-    r.readAsDataURL(file);
+    
+    const previewContainer = document.getElementById('photo-preview');
+    previewContainer.innerHTML = '';
+    
+    if (currentPhotoFiles.length === 1) {
+        const r = new FileReader(); 
+        r.onload = (e) => { 
+            previewContainer.innerHTML = `<img id="preview-img" src="${e.target.result}" style="max-width: 100%; max-height: 150px; border-radius: var(--radius); border: 1px solid var(--border-color);">`;
+            previewContainer.style.display = 'block'; 
+        };
+        r.readAsDataURL(currentPhotoFiles[0]);
+        
+        // Сброс селекта этапа (показываем как обычно)
+        document.getElementById('modal-stage-label').innerText = 'Этап';
+        document.getElementById('modal-stage').style.display = 'block';
+        document.getElementById('multi-stage-hint').style.display = 'none';
+    } else {
+        // Несколько файлов
+        let listHtml = '<ul style="text-align:left; color:var(--text-muted); font-size:0.9em; padding-left:20px; margin:0;">';
+        currentPhotoFiles.forEach((f, i) => {
+            listHtml += `<li>${f.name}</li>`;
+        });
+        listHtml += '</ul>';
+        previewContainer.innerHTML = `
+            <div style="background:var(--input-bg); padding:10px; border-radius:var(--radius); border:1px solid var(--border-color);">
+                <div style="color:var(--success-color); font-weight:bold; margin-bottom:5px;">Выбрано файлов: ${currentPhotoFiles.length}</div>
+                ${listHtml}
+            </div>
+        `;
+        previewContainer.style.display = 'block';
+
+        // Меняем лейбл этапа
+        document.getElementById('modal-stage-label').innerText = 'Начальный этап';
+        document.getElementById('multi-stage-hint').style.display = 'block';
+    }
 }
 
 function closePhotoModal() {
     document.getElementById('photo-modal').style.display = 'none';
     document.getElementById('attendance-photo').value = '';
     document.getElementById('photo-preview').style.display = 'none';
-    currentPhotoFile = null;
+    document.getElementById('photo-preview').innerHTML = '';
+    currentPhotoFiles = [];
 }
 
 async function saveAbsentStatuses() {
@@ -1367,13 +1449,13 @@ async function saveAbsentStatuses() {
 }
 
 async function confirmPhotoUpload() {
-    if (!currentPhotoFile || !canEdit()) return;
-    const stageNum = parseInt(document.getElementById('modal-stage').value);
+    if (currentPhotoFiles.length === 0 || !canEdit()) return;
+    
+    const startStage = parseInt(document.getElementById('modal-stage').value);
     const statusDiv = document.getElementById('photo-status');
     const sid = AppState.viewingSeason.id;
     document.getElementById('photo-modal').style.display = 'none';
-    statusDiv.innerHTML = 'РАСПОЗНАЁМ...';
-
+    
     const compressImage = (file) => new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -1423,59 +1505,83 @@ async function confirmPhotoUpload() {
         return bestMatch;
     };
 
+    let totalAdded = 0;
+    let allNotFound = [];
+    let globalPresentIds = new Set();
+    let lastProcessedStage = startStage;
+
     try {
-        const base64 = await compressImage(currentPhotoFile);
-        const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/recognize', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` },
-            body: JSON.stringify({ image: base64 })
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-        const result = await res.json();
-        
-        if (result.players && result.players.length > 0) {
-            let added = 0, notFound = [], presentIds = new Set();
-            for (const p of result.players) {
-                const pl = findPlayerSmart(p.nickname);
-                if (pl) {
-                    presentIds.add(pl.id);
-                    await supabaseClient.from('attendance').upsert({ player_id: pl.id, tournament_number: stageNum, status: 'Пришел', season_id: sid }, { onConflict: 'season_id, player_id, tournament_number' });
-                    await supabaseClient.from('match_stats').upsert({ player_id: pl.id, stage_number: stageNum, season_id: sid, kills: p.kills || 0, deaths: p.deaths || 0, assists: p.assists || 0, points: p.points || 0 }, { onConflict: 'season_id, player_id, stage_number' });
-                    await recalculatePlayerStats(pl.id);
-                    added++;
-                } else { notFound.push(p.nickname); }
+        for (let i = 0; i < currentPhotoFiles.length; i++) {
+            const file = currentPhotoFiles[i];
+            const stageNum = startStage + i;
+            lastProcessedStage = stageNum;
+
+            statusDiv.innerHTML = `ОБРАБОТКА ФАЙЛА ${i + 1} ИЗ ${currentPhotoFiles.length} (Этап ${stageNum})...`;
+
+            const base64 = await compressImage(file);
+            const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/recognize', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` },
+                body: JSON.stringify({ image: base64 })
+            });
+            
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            const result = await res.json();
+            
+            if (result.players && result.players.length > 0) {
+                let added = 0, notFound = [], presentIds = new Set();
+                for (const p of result.players) {
+                    const pl = findPlayerSmart(p.nickname);
+                    if (pl) {
+                        presentIds.add(pl.id);
+                        globalPresentIds.add(pl.id);
+                        await supabaseClient.from('attendance').upsert({ player_id: pl.id, tournament_number: stageNum, status: 'Пришел', season_id: sid }, { onConflict: 'season_id, player_id, tournament_number' });
+                        await supabaseClient.from('match_stats').upsert({ player_id: pl.id, stage_number: stageNum, season_id: sid, kills: p.kills || 0, deaths: p.deaths || 0, assists: p.assists || 0, points: p.points || 0 }, { onConflict: 'season_id, player_id, stage_number' });
+                        await recalculatePlayerStats(pl.id);
+                        added++;
+                    } else { notFound.push(p.nickname); }
+                }
+
+                if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
+                    await supabaseClient.from('clan_matches').upsert({
+                        stage_number: stageNum, match_date: getLocalDateString(),
+                        clan_score: result.clan_score, enemy_points: result.enemy_score,
+                        enemy_name: result.enemy_name || 'Неизвестный враг', season_id: sid
+                    }, { onConflict: 'season_id, stage_number' });
+                }
+
+                totalAdded += added;
+                allNotFound.push(...notFound);
             }
+        }
 
-            if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
-                await supabaseClient.from('clan_matches').upsert({
-                    stage_number: stageNum, match_date: getLocalDateString(),
-                    clan_score: result.clan_score, enemy_points: result.enemy_score,
-                    enemy_name: result.enemy_name || 'Неизвестный враг', season_id: sid
-                }, { onConflict: 'season_id, stage_number' });
-            }
+        // После обработки всех файлов, ищем отсутствующих
+        pendingAbsentPlayers = [];
+        AppState.activePlayers.forEach(pl => { if (!globalPresentIds.has(pl.id)) pendingAbsentPlayers.push(pl); });
 
-            pendingAbsentPlayers = [];
-            AppState.activePlayers.forEach(pl => { if (!presentIds.has(pl.id)) pendingAbsentPlayers.push(pl); });
+        statusDiv.innerHTML = `УСПЕШНО ПРИШЛО: ${totalAdded}.`;
+        if (allNotFound.length > 0) statusDiv.innerHTML += `<br>НЕ НАЙДЕНЫ: ${[...new Set(allNotFound)].join(', ')}`;
 
-            statusDiv.innerHTML = `ПРИШЛО: ${added}.`;
-            if (notFound.length > 0) statusDiv.innerHTML += `<br>НЕ НАЙДЕНЫ (пропущены): ${notFound.join(', ')}`;
+        if (pendingAbsentPlayers.length > 0) {
+            currentAbsentStage = startStage; // Записываем отгулы/прогулы на первый этап (или можно на последний)
+            const listContainer = document.getElementById('absent-players-list'); listContainer.innerHTML = '';
+            pendingAbsentPlayers.forEach(p => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid var(--border-color); margin-bottom:5px;';
+                row.innerHTML = `<span style="font-weight:bold;">${p.nickname}</span><select id="absent-status-${p.id}" style="padding:5px; border-radius:var(--radius); background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color);"><option value="Не пришел">Не пришел</option><option value="Отгул">Отгул</option></select>`;
+                listContainer.appendChild(row);
+            });
+            document.getElementById('absent-modal').style.display = 'flex';
+            statusDiv.innerHTML += `<br>ПОДТВЕРДИТЕ СТАТУСЫ (${pendingAbsentPlayers.length})`;
+        } else {
+            await refreshAll();
+            showToast(`Распознано ${totalAdded} игроков!`, 'success');
+        }
 
-            if (pendingAbsentPlayers.length > 0) {
-                currentAbsentStage = stageNum;
-                const listContainer = document.getElementById('absent-players-list'); listContainer.innerHTML = '';
-                pendingAbsentPlayers.forEach(p => {
-                    const row = document.createElement('div');
-                    row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid var(--border-color); margin-bottom:5px;';
-                    row.innerHTML = `<span style="font-weight:bold;">${p.nickname}</span><select id="absent-status-${p.id}" style="padding:5px; border-radius:var(--radius); background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color);"><option value="Не пришел">Не пришел</option><option value="Отгул">Отгул</option></select>`;
-                    listContainer.appendChild(row);
-                });
-                document.getElementById('absent-modal').style.display = 'flex';
-                statusDiv.innerHTML += `<br>ПОДТВЕРДИТЕ СТАТУСЫ (${pendingAbsentPlayers.length})`;
-            } else {
-                await refreshAll();
-                showToast(`Распознано ${added} игроков!`, 'success');
-            }
-        } else { statusDiv.innerHTML = `НЕ УДАЛОСЬ РАСПОЗНАТЬ.`; showToast('Ошибка распознавания', 'error'); }
-    } catch (err) { console.error(err); statusDiv.innerHTML = `ОШИБКА: ${err.message}`; showToast('Ошибка нейросети', 'error'); }
+    } catch (err) { 
+        console.error(err); 
+        statusDiv.innerHTML = `ОШИБКА: ${err.message}`; 
+        showToast('Ошибка нейросети', 'error'); 
+    }
     closePhotoModal(); document.getElementById('attendance-photo').value = '';
 }
 
