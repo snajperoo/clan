@@ -19,6 +19,7 @@ const AppState = {
     attendance: [], matchStats: [], matches: [], fines: [],
     tournaments: [], seasons: [],
     upcomingMatches: [],
+    matchDetails: {}, // Храним расчет тиров и гильз для каждого матча
     activeSeason: null, viewingSeason: null,
 };
 
@@ -79,6 +80,68 @@ function isViewingActive() {
 }
 function canEdit() {
     return isAdmin && isViewingActive();
+}
+
+// ==================== КОНТЕКСТНОЕ МЕНЮ (ФИЧА №3) ====================
+function showContextMenu(e, playerId) {
+    e.preventDefault();
+    if (!isAdmin) return;
+    
+    const menu = document.getElementById('custom-context-menu');
+    menu.innerHTML = `
+        <div class="context-item" onclick="goToPlayerProfile(${playerId}); hideContextMenu()">📝 Профиль</div>
+        <div class="context-item" onclick="openQuickFine(${playerId}); hideContextMenu()">⚖️ Выдать штраф</div>
+        <div class="context-item" onclick="quickKick(${playerId}); hideContextMenu()">🚫 Убрать из отряда</div>
+        <div class="context-item danger" onclick="quickDelete(${playerId}); hideContextMenu()">❌ Удалить</div>
+    `;
+    menu.style.display = 'block';
+    
+    // Умное позиционирование
+    let x = e.pageX;
+    let y = e.pageY;
+    if (x + 200 > window.innerWidth) x -= 200;
+    if (y + 200 > window.innerHeight) y -= 200;
+    
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+}
+
+function hideContextMenu() {
+    const m = document.getElementById('custom-context-menu');
+    if (m) m.style.display = 'none';
+}
+document.addEventListener('click', hideContextMenu);
+
+async function openQuickFine(playerId) {
+    const p = AppState.players.find(x => x.id === playerId);
+    if (!p) return;
+    const reason = prompt(`Причина штрафа для ${p.nickname}:`);
+    if (!reason) return;
+    const amount = parseInt(prompt('Сумма штрафа (₽):', '100'));
+    if (isNaN(amount)) return;
+    
+    await supabaseClient.from('fines').insert([{ player_id: playerId, reason, amount, status: 'open' }]);
+    showToast(`Штраф для ${p.nickname} выдан!`, 'success');
+    if (document.getElementById('tab-fines').classList.contains('active')) loadFines();
+}
+
+async function quickKick(playerId) {
+    if (!confirm('Убрать игрока из отряда?')) return;
+    await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', playerId);
+    showToast('Игрок убран из отряда', 'success');
+    await refreshAll();
+    if (document.getElementById('tab-roster').classList.contains('active')) initDragAndDrop();
+}
+
+async function quickDelete(playerId) {
+    const p = AppState.players.find(x => x.id === playerId);
+    if (!p) return;
+    if (!confirm(`⚠️ УДАЛИТЬ игрока ${p.nickname}? Это действие необратимо!`)) return;
+    await supabaseClient.from('players').delete().eq('id', playerId);
+    showToast('Игрок удален', 'success');
+    await refreshAll();
+    if (document.getElementById('tab-roster').classList.contains('active')) initDragAndDrop();
+    if (document.getElementById('tab-profile').classList.contains('active')) clearForm();
 }
 
 // ==================== ЗАГРУЗКА СЕЗОНОВ ====================
@@ -165,6 +228,65 @@ async function startNewSeason() {
     showToast(`Сезон ${nextNum} начат!`, 'success');
 }
 
+// ==================== РАСЧЕТ МАТЧЕЙ И ГИЛЬЗ ====================
+function calculateAllMatchDetails() {
+    AppState.matchDetails = {};
+    const sortedMatches = [...AppState.matches].filter(m => m.stage_number).sort((a, b) => a.stage_number - b.stage_number);
+    
+    let currentRating = START_RATING;
+    
+    sortedMatches.forEach(m => {
+        const tierBefore = getTierByRating(currentRating);
+        let ratingChange = 0;
+        let clanGears = 0;
+        const c = m.clan_score || 0;
+        const e = m.enemy_points || 0;
+        
+        if (c > e) {
+            ratingChange = RATING_CHANGE;
+            clanGears = tierBefore.win;
+            currentRating += ratingChange;
+        } else if (c < e) {
+            ratingChange = -RATING_CHANGE;
+            clanGears = tierBefore.loss;
+            currentRating += ratingChange;
+        }
+        
+        AppState.matchDetails[m.id] = { tierBefore, ratingChange, clanGears, totalRating: currentRating };
+    });
+}
+
+// Функция расчета личных гильз с учетом правила 20%
+function calculatePlayerGears(playerId) {
+    let totalGears = 0;
+    const playerStats = AppState.matchStats.filter(s => s.player_id === playerId);
+    
+    playerStats.forEach(stat => {
+        const match = AppState.matches.find(m => m.stage_number === stat.stage_number);
+        if (!match) return;
+        
+        const details = AppState.matchDetails[match.id];
+        if (!details) return;
+        
+        const clanScore = match.clan_score || 0;
+        const playerPoints = stat.points || 0;
+        
+        if (clanScore === 0) return;
+        
+        // ПРАВИЛО 20%: Если игрок набрал 20% или меньше от счета клана, он получает 0 гильз
+        if ((playerPoints / clanScore) <= 0.20) return; 
+        
+        let gears = 0;
+        if (clanScore > (match.enemy_points || 0)) { // Победа
+            gears = details.tierBefore.win;
+        } else if (clanScore < (match.enemy_points || 0)) { // Поражение
+            gears = details.tierBefore.loss;
+        }
+        totalGears += gears;
+    });
+    return totalGears;
+}
+
 // ==================== REFRESH ====================
 async function refreshTournaments() {
     if (!AppState.viewingSeason) { AppState.tournaments = []; return; }
@@ -228,6 +350,9 @@ async function refreshAll() {
     await loadSeasons();
     await Promise.all([refreshPlayers(), refreshTournaments()]);
     await Promise.all([refreshAttendance(), refreshMatchStats(), refreshMatches(), refreshFines(), refreshUpcoming()]);
+    
+    calculateAllMatchDetails(); // Пересчитываем тиры и гильзы для всех матчей
+
     renderTops();
     renderPlayerList();
     fillPlayerSelects();
@@ -246,6 +371,12 @@ async function refreshAll() {
         else if (id === 'tab-calendar') loadCalendar();
         else if (id === 'tab-compare') initCompareTab();
         else if (id === 'tab-roster') initDragAndDrop();
+        else if (id === 'tab-my-profile' && document.getElementById('my-profile-content').style.display !== 'none') {
+            // Если открыт личный профиль, обновляем его
+            const playerNick = document.getElementById('my-nickname-display')?.innerText;
+            const p = AppState.players.find(x => x.nickname === playerNick);
+            if (p) loadMyProfile(p);
+        }
     }
 }
 
@@ -393,7 +524,9 @@ function renderPlayerList(filterText = '') {
         const div = document.createElement('div'); div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
         let sColor = 'var(--success-color)'; if (p.status === 'в обработке') sColor = 'var(--accent-color)'; if (p.status === 'кикнут') sColor = 'var(--danger-color)';
         div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold;">${p.nickname}</span><span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span></div><span style="color:#888; font-size:0.8em;">${p.discord_id || 'ID: ' + p.id}</span>`;
-        div.onclick = () => selectPlayer(p); container.appendChild(div);
+        div.onclick = () => selectPlayer(p); 
+        div.oncontextmenu = (e) => showContextMenu(e, p.id); // ПКМ меню
+        container.appendChild(div);
     });
 }
 
@@ -490,11 +623,17 @@ async function deletePlayer() {
 async function loadMyProfile(player) {
     if (!player) return;
     document.getElementById('my-profile-content').style.display = 'block';
+    document.getElementById('my-nickname-display').innerText = player.nickname; // Для обновления
     const st = computeSeasonStats(player.id);
     document.getElementById('my-kd').innerText = st.kd;
     document.getElementById('my-kda').innerText = st.kda;
     document.getElementById('my-points').innerText = st.points;
     document.getElementById('my-squad').innerText = player.squad ? `${player.squad} (${player.role})` : 'Не в отряде';
+    
+    // Личные гильзы с учетом 20%
+    const myGears = calculatePlayerGears(player.id);
+    document.getElementById('my-gears').innerText = myGears.toLocaleString('ru-RU');
+
     const statusEl = document.getElementById('my-status');
     if (statusEl) {
         statusEl.innerText = player.status || 'в клане';
@@ -525,7 +664,7 @@ function initDragAndDrop(filterText = '') {
         const card = document.createElement('div'); card.className = 'squad-card'; let rH = '';
         sq.roles.forEach(role => {
             const a = AppState.activePlayers.find(p => p.squad === sq.name && p.role === role);
-            const n = a ? `<span style="cursor:pointer; color:var(--accent-color); text-decoration:underline;" onclick="event.stopPropagation(); goToPlayerProfile(${a.id})">${a.nickname}</span>` : 'Свободно';
+            const n = a ? `<span style="cursor:pointer; color:var(--accent-color); text-decoration:underline;" onclick="event.stopPropagation(); goToPlayerProfile(${a.id})" oncontextmenu="event.stopPropagation(); showContextMenu(event, ${a.id})" title="ПКМ - меню">${a.nickname}</span>` : 'Свободно';
             const c = a ? 'player-name' : 'empty-slot', id = a ? a.id : '';
             const rB = (a && canEdit()) ? `<button class="btn btn-danger" style="padding: 2px 6px; font-size: 0.7em; margin-left: 5px;" onclick="event.stopPropagation(); removeFromSquad(${a.id})">➖</button>` : '';
             const displayRole = role.replace(' 1', '').replace(' 2', '').replace(' 3', '');
@@ -548,7 +687,9 @@ function initDragAndDrop(filterText = '') {
     else free.forEach(p => {
         const i = document.createElement('div'); i.className = 'free-player-item'; i.draggable = canEdit();
         i.ondragstart = (e) => { e.dataTransfer.setData('text/plain', p.id); i.classList.add('dragging'); };
-        i.ondragend = () => i.classList.remove('dragging'); i.innerHTML = `<span>${p.nickname}</span>`; freeList.appendChild(i);
+        i.ondragend = () => i.classList.remove('dragging'); 
+        i.innerHTML = `<span oncontextmenu="showContextMenu(event, ${p.id})" style="cursor:context-menu;">${p.nickname}</span>`; 
+        freeList.appendChild(i);
     });
 }
 
@@ -1042,55 +1183,45 @@ async function loadMatchHistory() {
     if (tCountEl) tCountEl.innerText = Math.ceil(totalStages / STAGES_PER_TOURNAMENT);
     if (sCountEl) sCountEl.innerText = totalStages;
 
-    // === РАСЧЕТ РЕЙТИНГА И ГИЛЬЗ ===
+    // === БЕРЕМ ГОТОВЫЕ РАСЧЕТЫ ИЗ STATE ===
+    let finalRating = START_RATING;
+    let finalTier = TIERS[TIERS.length - 1];
+    let totalClanGears = 0;
+    
+    // Находим последний матч для определения текущего рейтинга
     const sortedMatches = [...AppState.matches].filter(m => m.stage_number).sort((a, b) => a.stage_number - b.stage_number);
-    
-    let currentRating = START_RATING;
-    let currentTier = getTierByRating(currentRating);
-    let totalGears = 0;
-    const matchDetails = {}; 
-    
-    sortedMatches.forEach(m => {
-        let ratingChange = 0;
-        let gearsEarned = 0;
-        const c = m.clan_score || 0;
-        const e = m.enemy_points || 0;
-        
-        const tierBeforeMatch = getTierByRating(currentRating);
-        
-        if (c > e) {
-            ratingChange = RATING_CHANGE;
-            gearsEarned = tierBeforeMatch.win;
-            currentRating += ratingChange;
-            currentTier = getTierByRating(currentRating);
-        } else if (c < e) {
-            ratingChange = -RATING_CHANGE;
-            gearsEarned = tierBeforeMatch.loss;
-            currentRating += ratingChange;
-            currentTier = getTierByRating(currentRating);
+    if (sortedMatches.length > 0) {
+        const lastMatch = sortedMatches[sortedMatches.length - 1];
+        const details = AppState.matchDetails[lastMatch.id];
+        if (details) {
+            finalRating = details.totalRating;
+            finalTier = getTierByRating(finalRating);
         }
         
-        totalGears += gearsEarned;
-        matchDetails[m.id] = { ratingChange, gearsEarned, totalRating: currentRating };
-    });
+        // Суммируем гильзы клана
+        sortedMatches.forEach(m => {
+            const det = AppState.matchDetails[m.id];
+            if (det) totalClanGears += det.clanGears;
+        });
+    }
 
     // Обновляем блок сверху
     const ratingEl = document.getElementById('hr-rating');
     if (ratingEl) {
-        ratingEl.innerText = currentRating;
-        if (currentRating > START_RATING) ratingEl.style.color = 'var(--success-color)';
-        else if (currentRating < START_RATING) ratingEl.style.color = 'var(--danger-color)';
+        ratingEl.innerText = finalRating;
+        if (finalRating > START_RATING) ratingEl.style.color = 'var(--success-color)';
+        else if (finalRating < START_RATING) ratingEl.style.color = 'var(--danger-color)';
         else ratingEl.style.color = 'var(--accent-color)';
     }
     
     const tierEl = document.getElementById('hr-tier');
     if (tierEl) {
-        tierEl.innerText = currentTier.name + ' Тир';
+        tierEl.innerText = finalTier.name + ' Тир';
         tierEl.style.color = 'var(--accent-color)'; 
     }
 
     const gearsEl = document.getElementById('hr-gears');
-    if (gearsEl) gearsEl.innerText = totalGears.toLocaleString('ru-RU');
+    if (gearsEl) gearsEl.innerText = totalClanGears.toLocaleString('ru-RU');
     // ================================================================
 
     let wins = 0, losses = 0, draws = 0;
@@ -1121,14 +1252,14 @@ async function loadMatchHistory() {
             else if (cScore < eScore) { scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; losses++; }
             else { winText = 'НИЧЬЯ'; draws++; }
 
-            const details = matchDetails[match.id] || { ratingChange: 0, gearsEarned: 0, totalRating: 0 };
+            const details = AppState.matchDetails[match.id] || { ratingChange: 0, clanGears: 0, totalRating: 0, tierBefore: TIERS[TIERS.length - 1] };
             
             const ratingHtml = details.ratingChange !== 0 
                 ? `<div style="font-size:0.85em; font-weight:bold; margin-top:5px; color:${details.ratingChange > 0 ? 'var(--success-color)' : 'var(--danger-color)'};">Рейтинг: ${details.ratingChange > 0 ? '+' : ''}${details.ratingChange} (Итого: ${details.totalRating})</div>`
                 : '';
             
-            const gearsHtml = details.gearsEarned > 0
-                ? `<div style="font-size:0.9em; font-weight:bold; color:#9cdcfe; margin-top:3px;">🪙 Гильзы: +${details.gearsEarned.toLocaleString('ru-RU')}</div>`
+            const gearsHtml = details.clanGears > 0
+                ? `<div style="font-size:0.9em; font-weight:bold; color:#9cdcfe; margin-top:3px;">🪙 Гильзы: +${details.clanGears.toLocaleString('ru-RU')}</div>`
                 : '';
 
             const adminEdit = canEdit() ? `
@@ -1185,7 +1316,7 @@ async function fillEmptyMatch(stageNum) {
         season_id: AppState.viewingSeason.id
     }]);
     if (error) showToast('Ошибка: ' + error.message, 'error');
-    else { showToast(`Матч создан для этапа ${stageNum}`, 'success'); await refreshMatches(); loadMatchHistory(); }
+    else { showToast(`Матч создан для этапа ${stageNum}`, 'success'); await refreshMatches(); calculateAllMatchDetails(); loadMatchHistory(); }
 }
 
 async function addMatchHistory() {
@@ -1205,14 +1336,14 @@ async function updateMatchData(id, field, value) {
     else if (field === 'match_date') { const t = (value || '').trim(); val = t === '' ? null : t; }
     const { error } = await supabaseClient.from('clan_matches').update({ [field]: val }).eq('id', id);
     if (error) showToast('Ошибка: ' + error.message, 'error');
-    else { showToast('Данные обновлены', 'success'); await refreshMatches(); loadMatchHistory(); }
+    else { showToast('Данные обновлены', 'success'); await refreshMatches(); calculateAllMatchDetails(); loadMatchHistory(); }
 }
 
 async function deleteMatch(id) {
     if (!canEdit() || !confirm('Удалить этот матч?')) return;
     const { error } = await supabaseClient.from('clan_matches').delete().eq('id', id);
     if (error) showToast('Ошибка: ' + error.message, 'error');
-    else { showToast('Матч удалён', 'success'); await refreshMatches(); loadMatchHistory(); }
+    else { showToast('Матч удалён', 'success'); await refreshMatches(); calculateAllMatchDetails(); loadMatchHistory(); }
 }
 
 function renderHistoryChart(wins, losses, draws) {
@@ -1637,6 +1768,10 @@ async function loadAnalytics() {
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
     document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
     
+    // Топ по гильзам с учетом 20%
+    const playersWithGears = active.map(p => ({ ...p, gears: calculatePlayerGears(p.id) })).sort((a, b) => b.gears - a.gears).slice(0, 10);
+    document.querySelector('#top-gears-table tbody').innerHTML = playersWithGears.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td style="color:#9cdcfe; font-weight:bold;">${p.gears.toLocaleString('ru-RU')}</td></tr>`).join('');
+
     document.getElementById('stat-total-players').innerText = active.length;
     const inS = active.filter(p => p.squad && p.squad.trim() !== '').length;
     document.getElementById('stat-in-squads').innerText = inS;
