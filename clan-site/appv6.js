@@ -37,8 +37,8 @@ const STAGES_PER_TOURNAMENT = 3;
 const RATING_CHANGE = 50;
 const START_RATING = 1000;
 
-// НАСТРОЙКА ПОРОГА ГИЛЬЗ (по умолчанию 20%)
-let gearsThresholdPercent = parseFloat(localStorage.getItem('gearsThresholdPercent')) || 20;
+// ЖЁСТКО ЗАШИТЫЙ ПОРОГ ГИЛЬЗ (20% как условие игры)
+const GEARS_THRESHOLD_PERCENT = 20;
 
 const SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -83,17 +83,6 @@ function isViewingActive() {
 }
 function canEdit() {
     return isAdmin && isViewingActive();
-}
-
-function updateGearsThreshold(val) {
-    let v = parseFloat(val);
-    if (isNaN(v) || v < 0) v = 0;
-    if (v > 100) v = 100;
-    gearsThresholdPercent = v;
-    localStorage.setItem('gearsThresholdPercent', v);
-    document.getElementById('gears-threshold-input').value = v;
-    refreshAll(); // Пересчитываем и обновляем интерфейс
-    showToast(`Порог гильз обновлен: ${v}%`, 'success');
 }
 
 // ==================== КОНТЕКСТНОЕ МЕНЮ ====================
@@ -256,7 +245,6 @@ function calculateAllMatchDetails() {
         const e = m.enemy_points || 0;
         const totalMatchScore = c + e;
         
-        // Рейтинг меняется всегда
         if (c > e) {
             ratingChange = RATING_CHANGE;
         } else if (c < e) {
@@ -266,8 +254,7 @@ function calculateAllMatchDetails() {
         // ГИЛЬЗЫ КЛАНА: проверяем, набрал ли КЛАН 20% от ОБЩЕГО счета матча (наш + врага)
         if (totalMatchScore > 0) {
             const clanRatio = c / totalMatchScore;
-            // Если набрали 20% или больше от общего счета
-            if (clanRatio >= (gearsThresholdPercent / 100)) {
+            if (clanRatio >= (GEARS_THRESHOLD_PERCENT / 100)) {
                 if (c > e) {
                     clanGears = tierBefore.win;
                 } else if (c < e) {
@@ -292,7 +279,6 @@ function calculatePlayerGears(playerId) {
         const details = AppState.matchDetails[match.id];
         if (!details) return;
         
-        // Если клан не получил гильзы за этот матч (не взял 20% от общего), игрок тоже получает 0
         if (details.clanGears === 0) return;
 
         const clanScore = match.clan_score || 0;
@@ -300,8 +286,7 @@ function calculatePlayerGears(playerId) {
         
         if (clanScore === 0) return;
         
-        // Игрок должен набрать 20% и более от СЧЕТА КЛАНА
-        if ((playerPoints / clanScore) < (gearsThresholdPercent / 100)) return; 
+        if ((playerPoints / clanScore) < (GEARS_THRESHOLD_PERCENT / 100)) return; 
         
         totalGears += details.clanGears; 
     });
@@ -1781,9 +1766,6 @@ async function loadAnalytics() {
     document.querySelector('#top-kda-table tbody').innerHTML = topKDA.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kda}</td></tr>`).join('');
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
     document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
-    
-    const playersWithGears = active.map(p => ({ ...p, gears: calculatePlayerGears(p.id) })).sort((a, b) => b.gears - a.gears).slice(0, 10);
-    document.querySelector('#top-gears-table tbody').innerHTML = playersWithGears.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td style="color:#9cdcfe; font-weight:bold;">${p.gears.toLocaleString('ru-RU')}</td></tr>`).join('');
 
     document.getElementById('stat-total-players').innerText = active.length;
     const inS = active.filter(p => p.squad && p.squad.trim() !== '').length;
@@ -1809,9 +1791,6 @@ async function loadAnalytics() {
             document.getElementById('avg-points-stage').innerText = Math.round(tP / stCount);
         }
     }
-
-    const thresholdInput = document.getElementById('gears-threshold-input');
-    if (thresholdInput) thresholdInput.value = gearsThresholdPercent;
 }
 
 const ANALYTICS_CHANNEL_ID = '1567231595797028874';
