@@ -337,6 +337,24 @@
                     <button class="btn" onclick="sendAdminSummaryToDiscord()" style="background:#5865F2; color:white; font-size:0.8em; padding:8px 15px;" title="Отправить сводку в Discord">🤖 Сводка в ЛС</button>
                 </div>
             </div>
+            <!-- [NEW] Фильтр истории по клану и дате -->
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:var(--card-bg); border-radius:var(--radius); border:1px solid var(--border-color);">
+                <div class="form-group" style="flex:2; margin:0; min-width:220px;">
+                    <label style="font-size:0.75em;">🔍 Клан-соперник</label>
+                    <input type="text" id="history-filter-enemy" placeholder="Название клана..." oninput="applyHistoryFiltersDebounced()" style="text-transform:uppercase;">
+                </div>
+                <div class="form-group" style="flex:1; margin:0; min-width:150px;">
+                    <label style="font-size:0.75em;">📅 Дата с</label>
+                    <input type="date" id="history-filter-date-from" onchange="applyHistoryFilters()">
+                </div>
+                <div class="form-group" style="flex:1; margin:0; min-width:150px;">
+                    <label style="font-size:0.75em;">📅 Дата по</label>
+                    <input type="date" id="history-filter-date-to" onchange="applyHistoryFilters()">
+                </div>
+                <button class="btn btn-danger" onclick="resetHistoryFilters()" style="align-self:flex-end; height:42px;">Сбросить</button>
+            </div>
+            <div id="history-filter-status" style="text-align:center; color:var(--accent-color); font-weight:bold; text-transform:uppercase; margin-bottom:15px; display:none;"></div>
+            <!-- [/NEW] -->
             <div id="tournament-mvp-container"></div>
             <div class="analytics-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom: 30px;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform: uppercase;">Общая диагностика</h3>
@@ -465,7 +483,6 @@
                     <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ОЧКИ</h3>
                     <table id="top-points-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Очки</th></tr></thead><tbody></tbody></table>
                 </div>
-                <!-- СТАТИСТИКА ПО КАРТАМ -->
                 <div class="analytics-card">
                     <h3 style="color:#9cdcfe; text-align:center; margin-bottom:15px; text-transform: uppercase;">СТАТИСТИКА ПО КАРТАМ</h3>
                     <table id="map-stats-table" style="width:100%;">
@@ -476,7 +493,6 @@
             </div>
             
             <div class="analytics-grid" style="margin-top:25px;">
-                <!-- ДИНАМИКА С ПРОШЛЫМ СЕЗОНОМ -->
                 <div class="analytics-card">
                     <h3 id="analytics-dynamics-title" style="color:#e91e63; text-align:center; margin-bottom:15px; text-transform: uppercase;">Сравнение с прошлым сезоном</h3>
                     <div style="display:flex; flex-direction:column; gap:10px; text-align:center;">
@@ -492,7 +508,6 @@
                     </div>
                 </div>
 
-                <!-- СТАТИСТИКА ГРАНАТ -->
                 <div class="analytics-card">
                     <h3 style="color:#9c27b0; text-align:center; margin-bottom:15px; text-transform: uppercase;">Гранаты</h3>
                     <div class="stats-summary" style="flex-wrap:wrap; gap:10px;">
