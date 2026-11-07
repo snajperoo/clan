@@ -15,7 +15,7 @@ const AppState = {
 let currentEditId = null, isAdmin = false, currentPhotoFile = null;
 let pendingAbsentPlayers = [], currentAbsentStage = null;
 let currentSortColumn = 'kd', currentSortDirection = 'desc';
-let topsSeasonMode = 'all'; // 'all' | 'season'
+let topsSeasonMode = 'all'; 
 let myChart = null, compareChart = null;
 
 const ADMIN_SECRET_CODE = 'ADMIN123';
@@ -758,26 +758,7 @@ async function addTournament() {
     const { error } = await supabaseClient.from('tournaments').insert([{ tournament_number: nextNum, season_id: sid }]);
     if (error) { showToast('Ошибка: ' + error.message, 'error'); return; }
 
-    // Автоматическое расписание на чт-пт-сб
-    if (confirm(`Создать расписание для Турнира ${nextNum} в календаре (чт, пт, сб)?`)) {
-        const startDate = prompt('Дата первого этапа (ГГГГ-ММ-ДД):', nextThursday());
-        if (startDate) {
-            for (let i = 0; i < STAGES_PER_TOURNAMENT; i++) {
-                const d = new Date(startDate + 'T00:00:00');
-                d.setDate(d.getDate() + i);
-                await supabaseClient.from('upcoming_matches').insert([{
-                    match_date: d.toISOString().split('T')[0],
-                    tournament_number: nextNum,
-                    stage_number: (nextNum - 1) * STAGES_PER_TOURNAMENT + i + 1,
-                    match_type: 'tournament',
-                    season_id: sid
-                }]);
-            }
-        }
-    }
-
     await refreshTournaments();
-    await refreshUpcoming();
     showToast(`Турнир ${nextNum} добавлен (этапы ${nextNum*3-2}–${nextNum*3})`, 'success');
     const active = document.querySelector('.tab-content.active');
     if (active && active.id === 'tab-attendance') loadAttendance();
@@ -1135,37 +1116,72 @@ async function loadCalendar() {
     }
 
     const now = new Date(); now.setHours(0, 0, 0, 0);
-    const upcoming = AppState.upcomingMatches.filter(m => new Date(m.match_date) >= now);
-    const past = AppState.upcomingMatches.filter(m => new Date(m.match_date) < now);
 
-    const renderCard = (m, isPast = false) => {
-        const d = new Date(m.match_date);
-        const dateStr = d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', weekday: 'long' });
-        const daysUntil = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
-        const badge = isPast ? '' : (daysUntil === 0 ? '<span style="color:var(--danger-color); font-weight:bold;">СЕГОДНЯ</span>' : daysUntil === 1 ? '<span style="color:var(--accent-color);">ЗАВТРА</span>' : `<span style="color:var(--text-muted);">через ${daysUntil} дн.</span>`);
-        const tourInfo = m.tournament_number ? `<div style="font-size:0.8em; color:var(--accent-color);">Турнир ${m.tournament_number}${m.stage_number ? ` · Этап ${m.stage_number}` : ''}</div>` : '';
-        const adminActions = canEdit() ? `<button class="btn btn-danger" style="padding:3px 8px; font-size:0.75em; margin-top:8px;" onclick="deleteUpcoming(${m.id})">Удалить</button>` : '';
+    const grouped = {};
+    AppState.upcomingMatches.forEach(m => {
+        const key = m.tournament_number ? `tour_${m.tournament_number}` : `m_${m.id}`;
+        if (!grouped[key]) grouped[key] = { tour: m.tournament_number, matches: [], isPast: true };
+        grouped[key].matches.push(m);
+        if (new Date(m.match_date) >= now) grouped[key].isPast = false;
+    });
+
+    const upcoming = Object.values(grouped).filter(g => !g.isPast);
+    const past = Object.values(grouped).filter(g => g.isPast);
+
+    const renderGroup = (g, isPast = false) => {
+        g.matches.sort((a, b) => new Date(a.match_date) - new Date(b.match_date));
         
-        return `<div class="calendar-card" style="opacity:${isPast ? 0.5 : 1};">
-            ${tourInfo}
-            <div style="color:var(--accent-color); font-weight:bold; font-size:1.1em; margin-bottom:5px;">${dateStr}${m.match_time ? ' · ' + m.match_time : ''}</div>
-            <div style="font-size:1.2em; margin-bottom:5px;">🏆 Турнир</div>
-            ${badge}
-            ${m.notes ? `<div style="color:var(--text-muted); font-size:0.9em; margin-top:5px; font-style:italic;">${m.notes}</div>` : ''}
-            ${adminActions}
-        </div>`;
+        let html = `<div class="calendar-card" style="display:flex; flex-direction:column; justify-content:space-between; opacity:${isPast ? 0.5 : 1};">`;
+        html += `<div>`;
+        
+        if (g.tour) {
+            html += `<div style="color:var(--accent-color); font-weight:bold; font-size:1.2em; margin-bottom:10px; border-bottom: 2px solid var(--border-color); padding-bottom: 5px;">🏆 ТУРНИР ${g.tour}</div>`;
+        } else {
+            html += `<div style="color:var(--accent-color); font-weight:bold; font-size:1.2em; margin-bottom:10px; border-bottom: 2px solid var(--border-color); padding-bottom: 5px;">🏆 ТУРНИР (вне сезона)</div>`;
+        }
+
+        g.matches.forEach(m => {
+            const d = new Date(m.match_date);
+            const daysUntil = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+            let badge = '';
+            if (!isPast && daysUntil === 0) badge = ' <span style="color:var(--danger-color); font-weight:bold;">СЕГОДНЯ</span>';
+            else if (!isPast && daysUntil === 1) badge = ' <span style="color:var(--accent-color);">ЗАВТРА</span>';
+            
+            const dateStr = d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', weekday: 'short' });
+            const timeStr = m.match_time ? ` · ${m.match_time}` : '';
+            const stageLabel = m.stage_number ? `Этап ${m.stage_number}: ` : '';
+
+            html += `
+                <div style="padding: 8px 0; border-bottom: 1px dashed var(--border-color);">
+                    <div style="font-weight: bold; color: var(--text-color);">${stageLabel}<span style="color:var(--accent-color);">${dateStr}${timeStr}</span>${badge}</div>
+                    ${m.notes ? `<div style="font-size:0.85em; color:var(--text-muted); margin-top:2px;">${m.notes}</div>` : ''}
+                </div>
+            `;
+        });
+
+        html += `</div>`;
+
+        if (canEdit()) {
+            html += `<div style="display:flex; gap:5px; margin-top:10px; flex-wrap:wrap;">`;
+            g.matches.forEach(m => {
+                html += `<button class="btn btn-danger" style="padding:3px 8px; font-size:0.75em;" onclick="deleteUpcoming(${m.id})">Удалить ${m.stage_number ? 'Э' + m.stage_number : ''}</button>`;
+            });
+            html += `</div>`;
+        }
+        html += `</div>`;
+        return html;
     };
 
-    let html = '';
+    let finalHtml = '';
     if (upcoming.length > 0) {
-        html += '<h3 style="color:var(--accent-color); text-transform:uppercase; margin-bottom:15px;">Ближайшие турниры</h3>';
-        html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:15px; margin-bottom:30px;">${upcoming.map(m => renderCard(m)).join('')}</div>`;
+        finalHtml += '<h3 style="color:var(--accent-color); text-transform:uppercase; margin-bottom:15px;">Ближайшие турниры</h3>';
+        finalHtml += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:15px; margin-bottom:30px;">${upcoming.map(g => renderGroup(g, false)).join('')}</div>`;
     }
     if (past.length > 0) {
-        html += '<h3 style="color:var(--text-muted); text-transform:uppercase; margin-bottom:15px;">Прошедшие</h3>';
-        html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:15px;">${past.slice(-5).reverse().map(m => renderCard(m, true)).join('')}</div>`;
+        finalHtml += '<h3 style="color:var(--text-muted); text-transform:uppercase; margin-bottom:15px;">Прошедшие</h3>';
+        finalHtml += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:15px;">${past.slice(-5).reverse().map(g => renderGroup(g, true)).join('')}</div>`;
     }
-    container.innerHTML = html;
+    container.innerHTML = finalHtml;
 }
 
 async function addUpcomingMatch() {
@@ -1178,16 +1194,33 @@ async function addUpcomingMatch() {
 
     if (!date) return showToast('Укажите дату', 'error');
 
-    const { error } = await supabaseClient.from('upcoming_matches').insert([{
-        match_date: date, match_time: time || null,
-        match_type: 'tournament', notes: notes || null,
-        tournament_number: tourNum ? parseInt(tourNum) : null,
-        stage_number: stageNum ? parseInt(stageNum) : null,
-        season_id: AppState.viewingSeason.id
-    }]);
-
-    if (error) { showToast('Ошибка: ' + error.message, 'error'); return; }
-    showToast('Турнир добавлен в календарь', 'success');
+    if (tourNum && !stageNum) {
+        const startDate = new Date(date + 'T00:00:00');
+        for (let i = 0; i < 3; i++) {
+            const d = new Date(startDate);
+            d.setDate(d.getDate() + i);
+            const globalStage = (parseInt(tourNum) - 1) * 3 + i + 1;
+            await supabaseClient.from('upcoming_matches').insert([{
+                match_date: d.toISOString().split('T')[0], match_time: time || null,
+                match_type: 'tournament', notes: notes || null,
+                tournament_number: parseInt(tourNum),
+                stage_number: globalStage,
+                season_id: AppState.viewingSeason.id
+            }]);
+        }
+        showToast(`Турнир ${tourNum} добавлен (3 этапа)`, 'success');
+    } else {
+        const { error } = await supabaseClient.from('upcoming_matches').insert([{
+            match_date: date, match_time: time || null,
+            match_type: 'tournament', notes: notes || null,
+            tournament_number: tourNum ? parseInt(tourNum) : null,
+            stage_number: stageNum ? parseInt(stageNum) : null,
+            season_id: AppState.viewingSeason.id
+        }]);
+        if (error) { showToast('Ошибка: ' + error.message, 'error'); return; }
+        showToast('Матч добавлен', 'success');
+    }
+    
     document.getElementById('cal-notes').value = '';
     await refreshUpcoming();
     loadCalendar();
