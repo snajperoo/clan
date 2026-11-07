@@ -50,7 +50,7 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// Конфигурация оружия и брони (обновлена по скриншотам)
+// Конфигурация оружия и брони (по вашим скриншотам)
 const EQUIPMENT_CONFIG = {
     rifles: [
         'A-545', 'A-762 «Арес»', 'AAC Honey Badger', 'ACM «Сервал»', 'AK-12 (A)', 'AK-15', 'AK-308', 'AK-308 (A)', 
@@ -80,7 +80,6 @@ const EQUIPMENT_CONFIG = {
         'AEK-965', 'Derya MK-12 (A)', 'Derya MK-12 AS-103S', 'KS-12 Komrad', 'MP-155 Ultima', 
         'Pancor Jackhammer', 'ТОЗ-84'
     ].sort(),
-    // Обновленная боевая броня
     armor_combat: [
         'SBA TANK', 
         'Бронекостюм «КЗ-4»', 
@@ -90,7 +89,6 @@ const EQUIPMENT_CONFIG = {
         'Бронекостюм «Центурион»', 
         'Экзоброня «Гектор»'
     ].sort(),
-    // Обновленная комбинированная + научная броня
     armor_combined: [
         'Бронекостюм «Скиф-5»', 
         'Экзоброня «Гончий»', 
@@ -98,7 +96,7 @@ const EQUIPMENT_CONFIG = {
         'Бронескелет «Альбатрос-Перехватчик»', 
         'УКАЗ АО-6 «Кочевник»', 
         'Экзоброня «Куница»', 
-        'Экзоброня «Антарес»' // Научка
+        'Экзоброня «Антарес»'
     ].sort()
 };
 
@@ -227,8 +225,11 @@ async function refreshTournaments() {
     AppState.tournaments = data || [];
 }
 async function refreshPlayers() {
-    const { data } = await supabaseClient.from('players').select('*').order('kd', { ascending: false });
-    AppState.players = data || []; AppState.activePlayers = AppState.players.filter(p => !p.status || p.status === 'в клане');
+    // Убрали .order() во избежание ошибок 400. Сортируем локально.
+    const { data } = await supabaseClient.from('players').select('*');
+    AppState.players = data || []; 
+    AppState.players.sort((a, b) => (b.kd || 0) - (a.kd || 0));
+    AppState.activePlayers = AppState.players.filter(p => !p.status || p.status === 'в клане');
 }
 async function refreshAttendance() {
     if (!AppState.viewingSeason) { AppState.attendance = []; return; }
