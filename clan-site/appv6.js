@@ -19,7 +19,7 @@ const AppState = {
     attendance: [], matchStats: [], matches: [], fines: [],
     tournaments: [], seasons: [],
     upcomingMatches: [],
-    matchDetails: {}, // Храним расчет тиров и гильз для каждого матча
+    matchDetails: {},
     activeSeason: null, viewingSeason: null,
 };
 
@@ -36,6 +36,9 @@ const TOURNAMENTS_PER_SEASON = 12;
 const STAGES_PER_TOURNAMENT = 3;
 const RATING_CHANGE = 50;
 const START_RATING = 1000;
+
+// НАСТРОЙКА ПОРОГА ГИЛЬЗ (по умолчанию 20%)
+let gearsThresholdPercent = parseFloat(localStorage.getItem('gearsThresholdPercent')) || 20;
 
 const SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -82,6 +85,17 @@ function canEdit() {
     return isAdmin && isViewingActive();
 }
 
+function updateGearsThreshold(val) {
+    let v = parseFloat(val);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 100) v = 100;
+    gearsThresholdPercent = v;
+    localStorage.setItem('gearsThresholdPercent', v);
+    document.getElementById('gears-threshold-input').value = v;
+    refreshAll(); // Пересчитываем и обновляем интерфейс
+    showToast(`Порог гильз обновлен: ${v}%`, 'success');
+}
+
 // ==================== КОНТЕКСТНОЕ МЕНЮ (ФИЧА №3) ====================
 function showContextMenu(e, playerId) {
     e.preventDefault();
@@ -96,7 +110,6 @@ function showContextMenu(e, playerId) {
     `;
     menu.style.display = 'block';
     
-    // Умное позиционирование
     let x = e.pageX;
     let y = e.pageY;
     if (x + 200 > window.innerWidth) x -= 200;
@@ -256,7 +269,6 @@ function calculateAllMatchDetails() {
     });
 }
 
-// Функция расчета личных гильз с учетом правила 20%
 function calculatePlayerGears(playerId) {
     let totalGears = 0;
     const playerStats = AppState.matchStats.filter(s => s.player_id === playerId);
@@ -273,13 +285,13 @@ function calculatePlayerGears(playerId) {
         
         if (clanScore === 0) return;
         
-        // ПРАВИЛО 20%: Если игрок набрал 20% или меньше от счета клана, он получает 0 гильз
-        if ((playerPoints / clanScore) <= 0.20) return; 
+        // ИЗМЕНЕНО: Теперь 20% включительно дают гильзы (строго меньше 20% - 0 гильз)
+        if ((playerPoints / clanScore) < (gearsThresholdPercent / 100)) return; 
         
         let gears = 0;
-        if (clanScore > (match.enemy_points || 0)) { // Победа
+        if (clanScore > (match.enemy_points || 0)) {
             gears = details.tierBefore.win;
-        } else if (clanScore < (match.enemy_points || 0)) { // Поражение
+        } else if (clanScore < (match.enemy_points || 0)) {
             gears = details.tierBefore.loss;
         }
         totalGears += gears;
@@ -351,7 +363,7 @@ async function refreshAll() {
     await Promise.all([refreshPlayers(), refreshTournaments()]);
     await Promise.all([refreshAttendance(), refreshMatchStats(), refreshMatches(), refreshFines(), refreshUpcoming()]);
     
-    calculateAllMatchDetails(); // Пересчитываем тиры и гильзы для всех матчей
+    calculateAllMatchDetails();
 
     renderTops();
     renderPlayerList();
@@ -372,7 +384,6 @@ async function refreshAll() {
         else if (id === 'tab-compare') initCompareTab();
         else if (id === 'tab-roster') initDragAndDrop();
         else if (id === 'tab-my-profile' && document.getElementById('my-profile-content').style.display !== 'none') {
-            // Если открыт личный профиль, обновляем его
             const playerNick = document.getElementById('my-nickname-display')?.innerText;
             const p = AppState.players.find(x => x.nickname === playerNick);
             if (p) loadMyProfile(p);
@@ -525,7 +536,7 @@ function renderPlayerList(filterText = '') {
         let sColor = 'var(--success-color)'; if (p.status === 'в обработке') sColor = 'var(--accent-color)'; if (p.status === 'кикнут') sColor = 'var(--danger-color)';
         div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold;">${p.nickname}</span><span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span></div><span style="color:#888; font-size:0.8em;">${p.discord_id || 'ID: ' + p.id}</span>`;
         div.onclick = () => selectPlayer(p); 
-        div.oncontextmenu = (e) => showContextMenu(e, p.id); // ПКМ меню
+        div.oncontextmenu = (e) => showContextMenu(e, p.id);
         container.appendChild(div);
     });
 }
@@ -623,14 +634,13 @@ async function deletePlayer() {
 async function loadMyProfile(player) {
     if (!player) return;
     document.getElementById('my-profile-content').style.display = 'block';
-    document.getElementById('my-nickname-display').innerText = player.nickname; // Для обновления
+    document.getElementById('my-nickname-display').innerText = player.nickname; 
     const st = computeSeasonStats(player.id);
     document.getElementById('my-kd').innerText = st.kd;
     document.getElementById('my-kda').innerText = st.kda;
     document.getElementById('my-points').innerText = st.points;
     document.getElementById('my-squad').innerText = player.squad ? `${player.squad} (${player.role})` : 'Не в отряде';
     
-    // Личные гильзы с учетом 20%
     const myGears = calculatePlayerGears(player.id);
     document.getElementById('my-gears').innerText = myGears.toLocaleString('ru-RU');
 
@@ -1183,12 +1193,10 @@ async function loadMatchHistory() {
     if (tCountEl) tCountEl.innerText = Math.ceil(totalStages / STAGES_PER_TOURNAMENT);
     if (sCountEl) sCountEl.innerText = totalStages;
 
-    // === БЕРЕМ ГОТОВЫЕ РАСЧЕТЫ ИЗ STATE ===
     let finalRating = START_RATING;
     let finalTier = TIERS[TIERS.length - 1];
     let totalClanGears = 0;
     
-    // Находим последний матч для определения текущего рейтинга
     const sortedMatches = [...AppState.matches].filter(m => m.stage_number).sort((a, b) => a.stage_number - b.stage_number);
     if (sortedMatches.length > 0) {
         const lastMatch = sortedMatches[sortedMatches.length - 1];
@@ -1198,14 +1206,12 @@ async function loadMatchHistory() {
             finalTier = getTierByRating(finalRating);
         }
         
-        // Суммируем гильзы клана
         sortedMatches.forEach(m => {
             const det = AppState.matchDetails[m.id];
             if (det) totalClanGears += det.clanGears;
         });
     }
 
-    // Обновляем блок сверху
     const ratingEl = document.getElementById('hr-rating');
     if (ratingEl) {
         ratingEl.innerText = finalRating;
@@ -1222,7 +1228,6 @@ async function loadMatchHistory() {
 
     const gearsEl = document.getElementById('hr-gears');
     if (gearsEl) gearsEl.innerText = totalClanGears.toLocaleString('ru-RU');
-    // ================================================================
 
     let wins = 0, losses = 0, draws = 0;
     timeline.innerHTML = '';
@@ -1768,7 +1773,7 @@ async function loadAnalytics() {
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
     document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
     
-    // Топ по гильзам с учетом 20%
+    // Топ по гильзам с учетом 20% (или другого порога)
     const playersWithGears = active.map(p => ({ ...p, gears: calculatePlayerGears(p.id) })).sort((a, b) => b.gears - a.gears).slice(0, 10);
     document.querySelector('#top-gears-table tbody').innerHTML = playersWithGears.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td style="color:#9cdcfe; font-weight:bold;">${p.gears.toLocaleString('ru-RU')}</td></tr>`).join('');
 
@@ -1796,6 +1801,10 @@ async function loadAnalytics() {
             document.getElementById('avg-points-stage').innerText = Math.round(tP / stCount);
         }
     }
+
+    // Устанавливаем текущее значение порога в инпут
+    const thresholdInput = document.getElementById('gears-threshold-input');
+    if (thresholdInput) thresholdInput.value = gearsThresholdPercent;
 }
 
 const ANALYTICS_CHANNEL_ID = '1567231595797028874';
@@ -1935,7 +1944,6 @@ async function sendAdminSummaryToDiscord() {
     msg += `📊 Активных бойцов: ${active.length}\n`;
     msg += `🏆 Турниров сыграно: ${AppState.tournaments.length} из ${TOURNAMENTS_PER_SEASON}\n\n`;
 
-    // 1. Анализ прогулов
     const missed = AppState.attendance.filter(a => a.status === 'Не пришел');
     const missedGrouped = {};
     missed.forEach(m => {
@@ -1956,7 +1964,6 @@ async function sendAdminSummaryToDiscord() {
         msg += `✅ С дисциплиной всё отлично.\n\n`;
     }
 
-    // 2. Лучшие игроки за последний турнир
     if (AppState.tournaments.length > 0) {
         const lastTour = Math.max(...AppState.tournaments.map(t => t.tournament_number));
         const startStage = (lastTour - 1) * STAGES_PER_TOURNAMENT + 1;
@@ -1992,7 +1999,7 @@ async function sendAdminSummaryToDiscord() {
         const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/send-to-discord', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                userId: DISCORD_USER_ID, // <--- Отправка в ЛС
+                userId: DISCORD_USER_ID,
                 content: msg,
                 imageBase64: null,
                 deletePrevious: false 
