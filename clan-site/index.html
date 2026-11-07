@@ -319,7 +319,10 @@
         <div id="tab-roster" class="tab-content">
             <div class="stage-header">
                 <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Состав клана</h2>
-                <button class="btn" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-danger" onclick="clearAllSquads()" id="btn-clear-roster">Очистить состав</button>
+                    <button class="btn" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
+                </div>
             </div>
             <div class="roster-layout">
                 <div class="roster-board" id="roster-board"></div>
