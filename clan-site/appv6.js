@@ -559,10 +559,6 @@ async function loadMatchHistory() {
                         <option value="">-- Не выбрана --</option>
                         ${TOURNAMENT_MAPS.map(m => `<option value="${m}" ${match.map_name === m ? 'selected' : ''}>${m}</option>`).join('')}
                     </select>
-                    <div style="display:flex; gap:5px;">
-                        <div style="flex:1;"><label style="font-size:0.75em; color:var(--text-muted);">ГРАНАТЫ</label><input type="number" value="${match.grenades_used || 0}" onchange="updateMatchData(${match.id}, 'grenades_used', this.value)" style="width:100%; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px;"></div>
-                        <div style="flex:1;"><label style="font-size:0.75em; color:var(--text-muted);">ЭФФЕКТ (1-5)</label><input type="number" min="1" max="5" value="${match.grenades_efficiency || 1}" onchange="updateMatchData(${match.id}, 'grenades_efficiency', this.value)" style="width:100%; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px;"></div>
-                    </div>
                     <label style="font-size:0.75em; color:var(--text-muted);">ДАТА</label>
                     <input type="date" value="${match.match_date || ''}" onchange="updateMatchData(${match.id}, 'match_date', this.value)" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px;">
                     <label style="font-size:0.75em; color:var(--text-muted);">ПРОТИВНИК</label>
@@ -581,7 +577,7 @@ async function loadMatchHistory() {
 }
 async function fillEmptyMatch(stageNum) {
     if (!canEdit()) return; const date = prompt(`Дата матча для этапа ${stageNum}:`, getLocalDateString()); if (date === null) return;
-    const { error } = await supabaseClient.from('clan_matches').insert([{ stage_number: stageNum, match_date: date.trim() || null, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг', grenades_used: 0, grenades_efficiency: 0, season_id: AppState.viewingSeason.id }]);
+    const { error } = await supabaseClient.from('clan_matches').insert([{ stage_number: stageNum, match_date: date.trim() || null, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг', season_id: AppState.viewingSeason.id }]);
     if (error) showToast('Ошибка', 'error'); else { showToast(`Матч создан`, 'success'); await refreshMatches(); calculateAllMatchDetails(); loadMatchHistory(); }
 }
 async function addMatchHistory() {
@@ -590,7 +586,7 @@ async function addMatchHistory() {
 }
 async function updateMatchData(id, field, value) {
     if (!canEdit()) return; let val = value;
-    if (field === 'clan_score' || field === 'enemy_points' || field === 'grenades_used' || field === 'grenades_efficiency') val = parseInt(value) || 0;
+    if (field === 'clan_score' || field === 'enemy_points') val = parseInt(value) || 0;
     else if (field === 'match_date') { const t = (value || '').trim(); val = t === '' ? null : t; }
     const { error } = await supabaseClient.from('clan_matches').update({ [field]: val }).eq('id', id);
     if (error) showToast('Ошибка', 'error'); else { showToast('Обновлено', 'success'); await refreshMatches(); calculateAllMatchDetails(); loadMatchHistory(); }
@@ -712,31 +708,14 @@ async function loadAnalytics() {
     const mapTbody = document.querySelector('#map-stats-table tbody');
     if (mapTbody) { mapTbody.innerHTML = Object.entries(mapStats).map(([map, s]) => { const wr = s.total === 0 ? 0 : Math.round((s.wins / s.total) * 100); const color = wr >= 50 ? 'var(--success-color)' : 'var(--danger-color)'; return `<tr><td>${map}</td><td>${s.total}</td><td>${s.wins}</td><td style="color:${color}; font-weight:bold;">${wr}%</td></tr>`; }).join(''); }
 
-    // СТАТИСТИКА ПО ГРАНАТАМ
-    let totalGrenades = 0, totalEfficiency = 0, matchesWithGrenades = 0;
-    let grenadesInWins = 0, grenadesInLosses = 0;
-    AppState.matches.forEach(m => {
-        if (m.grenades_used > 0) {
-            totalGrenades += m.grenades_used; totalEfficiency += (m.grenades_efficiency || 0); matchesWithGrenades++;
-            if (m.clan_score > m.enemy_points) grenadesInWins += m.grenades_used;
-            else if (m.clan_score < m.enemy_points) grenadesInLosses += m.grenades_used;
-        }
-    });
-    document.getElementById('analytics-grenades-used').innerText = totalGrenades;
-    document.getElementById('analytics-grenades-avg').innerText = matchesWithGrenades > 0 ? (totalEfficiency / matchesWithGrenades).toFixed(1) : '0.0';
-    document.getElementById('analytics-grenades-wins').innerText = grenadesInWins;
-    document.getElementById('analytics-grenades-losses').innerText = grenadesInLosses;
-
     // ДИНАМИКА (Сравнение с прошлым сезоном)
     const prevSeason = AppState.seasons.find(s => s.season_number === AppState.viewingSeason.season_number - 1);
     const currentMatches = AppState.matches;
     const currentWins = currentMatches.filter(m => m.clan_score > m.enemy_points).length;
     const currentWR = currentMatches.length > 0 ? (currentWins / currentMatches.length) * 100 : 0;
-    const currentAvgKd = active.length > 0 ? active.reduce((a, p) => a + (p.kd || 0), 0) / active.length : 0;
 
     if (prevSeason) {
         const { data: pMatches } = await supabaseClient.from('clan_matches').select('*').eq('season_id', prevSeason.id);
-        const { data: pPlayers } = await supabaseClient.from('players').select('kd, kda, points'); // Это общий рейтинг, не сезонный, но для примера сойдет
         if (pMatches) {
             const prevWins = pMatches.filter(m => m.clan_score > m.enemy_points).length;
             const prevWR = pMatches.length > 0 ? (prevWins / pMatches.length) * 100 : 0;
@@ -748,8 +727,6 @@ async function loadAnalytics() {
             document.getElementById('analytics-dynamics-title').innerText = `Сравнение с Сезоном ${prevSeason.season_number}`;
             document.getElementById('analytics-dynamics-wr').innerHTML = `<span style="color:${wrColor};">${wrArrow} ${diffWR.toFixed(1)}%</span>`;
             document.getElementById('analytics-dynamics-wr-prev').innerText = `Было: ${prevWR.toFixed(1)}%`;
-            
-            // Просто выведем разницу в победах
             document.getElementById('analytics-dynamics-wins').innerText = `${currentWins} vs ${prevWins}`;
         }
     } else {
