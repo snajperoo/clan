@@ -288,16 +288,24 @@
                         <h3 style="color:var(--danger-color); margin-top:0; text-align:center; font-size:1em; text-transform: uppercase;">Прогулы (сезон)</h3>
                         <div style="display:flex; justify-content:center; font-size:1.1em;"><div>Не пришел: <strong id="pm-absent" style="color:var(--danger-color);">0</strong></div></div>
                     </div>
-                    <!-- [NEW] Заметки тренера (приватные) -->
+                    <!-- Заметки тренера -->
                     <div id="player-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
                         <h3 style="color:var(--accent-color); margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📝 Заметки тренера</h3>
                         <div id="player-notes-list" style="max-height:260px; overflow-y:auto; margin-bottom:10px;"></div>
                         <div class="form-group" style="margin-bottom:8px;">
                             <textarea id="player-note-input" rows="2" placeholder="Например: плохо держит угол на Низине..." style="width:100%; padding:8px 12px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-family:'Courier New', monospace; font-size:0.95em; resize:vertical;"></textarea>
                         </div>
-                        <button class="btn" onclick="addPlayerNote()" style="width:100%; padding:8px;">+ Добавить заметку</button>
+                        <button class="btn" onclick="addPlayerNote('coach')" style="width:100%; padding:8px;">+ Добавить заметку</button>
                     </div>
-                    <!-- [/NEW] -->
+                    <!-- Заметки табельщика -->
+                    <div id="player-timekeeper-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
+                        <h3 style="color:#9cdcfe; margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📋 Заметки табельщика</h3>
+                        <div id="player-timekeeper-notes-list" style="max-height:260px; overflow-y:auto; margin-bottom:10px;"></div>
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <textarea id="player-timekeeper-note-input" rows="2" placeholder="Например: пропустил 2 этапа без предупреждения..." style="width:100%; padding:8px 12px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-family:'Courier New', monospace; font-size:0.95em; resize:vertical;"></textarea>
+                        </div>
+                        <button class="btn" onclick="addPlayerNote('timekeeper')" style="width:100%; padding:8px; background:#9cdcfe; color:#000;">+ Добавить заметку</button>
+                    </div>
                     <div style="margin-top:25px; display:flex; gap:10px; flex-wrap:wrap;">
                         <button class="btn" onclick="saveProfile()">Сохранить</button>
                         <button class="btn" style="background:var(--accent-color); color:#000;" onclick="recalculatePlayerStats(currentEditId)">Пересчитать</button>
@@ -347,7 +355,7 @@
                     <button class="btn" onclick="sendAdminSummaryToDiscord()" style="background:#5865F2; color:white; font-size:0.8em; padding:8px 15px;" title="Отправить сводку в Discord">🤖 Сводка в ЛС</button>
                 </div>
             </div>
-            <!-- [NEW] Фильтр истории по клану и дате -->
+            <!-- Фильтр истории по клану и дате -->
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:var(--card-bg); border-radius:var(--radius); border:1px solid var(--border-color);">
                 <div class="form-group" style="flex:2; margin:0; min-width:220px;">
                     <label style="font-size:0.75em;">🔍 Клан-соперник</label>
@@ -364,7 +372,6 @@
                 <button class="btn btn-danger" onclick="resetHistoryFilters()" style="align-self:flex-end; height:42px;">Сбросить</button>
             </div>
             <div id="history-filter-status" style="text-align:center; color:var(--accent-color); font-weight:bold; text-transform:uppercase; margin-bottom:15px; display:none;"></div>
-            <!-- [/NEW] -->
             <div id="tournament-mvp-container"></div>
             <div class="analytics-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom: 30px;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform: uppercase;">Общая диагностика</h3>
@@ -517,24 +524,7 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="analytics-card">
-                    <h3 style="color:#9c27b0; text-align:center; margin-bottom:15px; text-transform: uppercase;">Гранаты</h3>
-                    <div class="stats-summary" style="flex-wrap:wrap; gap:10px;">
-                        <div style="flex:1; min-width:120px; background:var(--input-bg); border-color:var(--border-color);">
-                            <span style="color:var(--text-muted); font-size:0.8em;">Всего потрачено</span><br><strong id="analytics-grenades-used" style="font-size:1.5em; color:#9c27b0;">0</strong>
-                        </div>
-                        <div style="flex:1; min-width:120px; background:var(--input-bg); border-color:var(--border-color);">
-                            <span style="color:var(--text-muted); font-size:0.8em;">Средняя эффективность</span><br><strong id="analytics-grenades-avg" style="font-size:1.5em; color:#9c27b0;">0.0</strong>
-                        </div>
-                        <div style="flex:1; min-width:120px; background:var(--input-bg); border-color:var(--border-color);">
-                            <span style="color:var(--success-color); font-size:0.8em;">В победах</span><br><strong id="analytics-grenades-wins" style="font-size:1.5em; color:var(--success-color);">0</strong>
-                        </div>
-                        <div style="flex:1; min-width:120px; background:var(--input-bg); border-color:var(--border-color);">
-                            <span style="color:var(--danger-color); font-size:0.8em;">В поражениях</span><br><strong id="analytics-grenades-losses" style="font-size:1.5em; color:var(--danger-color);">0</strong>
-                        </div>
-                    </div>
-                </div>
+                <!-- Блок "Гранаты" удалён -->
             </div>
 
             <div class="stats-summary" style="margin-top:25px;">
