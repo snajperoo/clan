@@ -22,6 +22,7 @@ const ADMIN_SECRET_CODE = 'ADMIN123';
 const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
 const TOURNAMENTS_PER_SEASON = 12;
 const STAGES_PER_TOURNAMENT = 3;
+const RATING_CHANGE = 50; // Очков за победу/поражение
 
 const SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -32,7 +33,6 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// === ХЕЛПЕР ДЛЯ ЛОКАЛЬНОЙ ДАТЫ ===
 function getLocalDateString(date = new Date()) {
     const offset = date.getTimezoneOffset();
     const localDate = new Date(date.getTime() - (offset * 60 * 1000));
@@ -205,7 +205,6 @@ function getMaxStage() {
     AppState.matchStats.forEach(s => { if (s.stage_number > max) max = s.stage_number; });
     AppState.matches.forEach(m => { if (m.stage_number && m.stage_number > max) max = m.stage_number; });
     
-    // Подтягиваем этапы из календаря, если дата матча уже наступила (сегодня или в прошлом)
     const today = getLocalDateString();
     AppState.upcomingMatches.forEach(u => {
         if (u.stage_number && u.match_date <= today && u.stage_number > max) {
@@ -979,6 +978,30 @@ async function loadMatchHistory() {
     if (tCountEl) tCountEl.innerText = Math.ceil(totalStages / STAGES_PER_TOURNAMENT);
     if (sCountEl) sCountEl.innerText = totalStages;
 
+    // === РАСЧЕТ РЕЙТИНГА ===
+    // Сортируем матчи по этапам, чтобы посчитать рейтинг от старых к новым
+    const sortedMatches = [...AppState.matches].filter(m => m.stage_number).sort((a, b) => a.stage_number - b.stage_number);
+    let currentRating = 0;
+    const matchRatings = {}; // matchId -> { change, total }
+    
+    sortedMatches.forEach(m => {
+        let change = 0;
+        const c = m.clan_score || 0;
+        const e = m.enemy_points || 0;
+        if (c > e) change = RATING_CHANGE;
+        else if (c < e) change = -RATING_CHANGE;
+        
+        currentRating += change;
+        matchRatings[m.id] = { change, total: currentRating };
+    });
+
+    const ratingEl = document.getElementById('hr-rating');
+    if (ratingEl) {
+        ratingEl.innerText = currentRating;
+        ratingEl.style.color = currentRating >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
+    }
+    // =======================
+
     let wins = 0, losses = 0, draws = 0;
     timeline.innerHTML = '';
 
@@ -1007,6 +1030,11 @@ async function loadMatchHistory() {
             else if (cScore < eScore) { scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; losses++; }
             else { winText = 'НИЧЬЯ'; draws++; }
 
+            const ratingInfo = matchRatings[match.id] || { change: 0, total: 0 };
+            const ratingHtml = ratingInfo.change !== 0 
+                ? `<div style="font-size:0.85em; font-weight:bold; margin-top:5px; color:${ratingInfo.change > 0 ? 'var(--success-color)' : 'var(--danger-color)'};">Рейтинг: ${ratingInfo.change > 0 ? '+' : ''}${ratingInfo.change} (Итого: ${ratingInfo.total})</div>`
+                : '';
+
             const adminEdit = canEdit() ? `
                 <div style="margin-top:15px; padding-top:15px; border-top:1px dashed var(--border-color); display:flex; flex-direction:column; gap:10px;">
                     <label style="font-size:0.75em; color:var(--text-muted); text-transform:uppercase;">Дата матча</label>
@@ -1028,6 +1056,7 @@ async function loadMatchHistory() {
                     <div class="timeline-opponent">vs <strong>${opponent}</strong></div>
                     <div class="timeline-score ${scoreClass}">${cScore} : ${eScore}</div>
                     <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${winText}</div>
+                    ${ratingHtml}
                     ${adminEdit}
                 </div>
             </div>`;
@@ -1131,9 +1160,7 @@ async function loadCalendar() {
         return;
     }
 
-    const now = new Date(); // <--- Текущее точное время (часы, минуты)
-    
-    // Для расчета дней (СЕГОДНЯ/ЗАВТРА)
+    const now = new Date(); 
     const todayStart = new Date(); 
     todayStart.setHours(0, 0, 0, 0);
 
@@ -1143,16 +1170,13 @@ async function loadCalendar() {
         if (!grouped[key]) grouped[key] = { tour: m.tournament_number, matches: [], isPast: true };
         grouped[key].matches.push(m);
         
-        // Собираем полную дату и время матча
         let matchDateTime;
         if (m.match_time) {
             matchDateTime = new Date(`${m.match_date}T${m.match_time}`);
         } else {
-            // Если время не указано, считаем, что матч идет до конца дня
             matchDateTime = new Date(`${m.match_date}T23:59:59`);
         }
         
-        // Если время матча еще не наступило — он предстоящий
         if (matchDateTime >= now) {
             grouped[key].isPast = false;
         }
@@ -1229,11 +1253,10 @@ async function addUpcomingMatch() {
     if (!date) return showToast('Укажите дату', 'error');
 
     if (tourNum && !stageNum) {
-        // Создаем 3 этапа строго на ОДНУ выбранную дату
         for (let i = 0; i < 3; i++) {
             const globalStage = (parseInt(tourNum) - 1) * 3 + i + 1;
             await supabaseClient.from('upcoming_matches').insert([{
-                match_date: date, // <--- Все этапы на одну дату
+                match_date: date, 
                 match_time: time || null,
                 match_type: 'tournament', 
                 notes: notes || null,
