@@ -632,14 +632,7 @@
         <div id="tab-analytics" class="tab-content">
             <div class="stage-header">
                 <h2 style="text-align:center; color:var(--accent-color); margin:0; text-transform: uppercase;">Аналитика</h2>
-                <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
-                    <div class="admin-only" style="display:flex; align-items:center; gap:10px; background:var(--card-bg); padding:10px; border-radius:var(--radius); border:1px solid var(--border-color);">
-                        <label style="color:var(--text-muted); font-size:0.85em;">Мин. % гильз:</label>
-                        <input type="number" id="gears-threshold-input" value="20" min="0" max="100" style="width:70px; padding:5px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); text-align:center;" onchange="updateGearsThreshold(this.value)">
-                        <span style="color:var(--text-muted);">%</span>
-                    </div>
-                    <button class="btn" onclick="sendAnalyticsScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
-                </div>
+                <button class="btn" onclick="sendAnalyticsScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
             </div>
 
             <div class="admin-only" style="text-align:center; margin-bottom:25px; display:none;">
@@ -658,11 +651,6 @@
                 <div class="analytics-card">
                     <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ОЧКИ</h3>
                     <table id="top-points-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Очки</th></tr></thead><tbody></tbody></table>
-                </div>
-                <!-- НОВАЯ ТАБЛИЦА ГИЛЬЗ -->
-                <div class="analytics-card">
-                    <h3 style="color:#9cdcfe; text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ГИЛЬЗЫ</h3>
-                    <table id="top-gears-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Гильзы</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
             <div class="stats-summary">
