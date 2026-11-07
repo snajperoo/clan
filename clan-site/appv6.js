@@ -22,7 +22,8 @@ const ADMIN_SECRET_CODE = 'ADMIN123';
 const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
 const TOURNAMENTS_PER_SEASON = 12;
 const STAGES_PER_TOURNAMENT = 3;
-const RATING_CHANGE = 50; // Очков за победу/поражение
+const RATING_CHANGE = 50;
+const START_RATING = 1000; // НОВОЕ: Стартовый рейтинг
 
 const SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -978,11 +979,10 @@ async function loadMatchHistory() {
     if (tCountEl) tCountEl.innerText = Math.ceil(totalStages / STAGES_PER_TOURNAMENT);
     if (sCountEl) sCountEl.innerText = totalStages;
 
-    // === РАСЧЕТ РЕЙТИНГА ===
-    // Сортируем матчи по этапам, чтобы посчитать рейтинг от старых к новым
+    // === РАСЧЕТ РЕЙТИНГА (СТАРТ 1000) ===
     const sortedMatches = [...AppState.matches].filter(m => m.stage_number).sort((a, b) => a.stage_number - b.stage_number);
-    let currentRating = 0;
-    const matchRatings = {}; // matchId -> { change, total }
+    let currentRating = START_RATING; // Начинаем с 1000
+    const matchRatings = {}; 
     
     sortedMatches.forEach(m => {
         let change = 0;
@@ -998,9 +998,12 @@ async function loadMatchHistory() {
     const ratingEl = document.getElementById('hr-rating');
     if (ratingEl) {
         ratingEl.innerText = currentRating;
-        ratingEl.style.color = currentRating >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
+        // Если больше 1000 — зеленый, меньше — красный, ровно 1000 — оранжевый
+        if (currentRating > START_RATING) ratingEl.style.color = 'var(--success-color)';
+        else if (currentRating < START_RATING) ratingEl.style.color = 'var(--danger-color)';
+        else ratingEl.style.color = 'var(--accent-color)';
     }
-    // =======================
+    // =====================================
 
     let wins = 0, losses = 0, draws = 0;
     timeline.innerHTML = '';
