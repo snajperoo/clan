@@ -20,7 +20,7 @@ const AppState = {
     attendance: [], matchStats: [], matches: [], fines: [],
     tournaments: [], seasons: [],
     upcomingMatches: [],
-    playerNotes: [],          // [NEW] заметки тренера
+    playerNotes: [],
     matchDetails: {},
     activeSeason: null, viewingSeason: null,
 };
@@ -222,7 +222,8 @@ async function refreshAll() {
         else if (id === 'tab-compare') initCompareTab();
         else if (id === 'tab-roster') initDragAndDrop();
     }
-    renderPlayerNotes(currentEditId);
+    renderNotesForPlayer(currentEditId, 'coach');
+    renderNotesForPlayer(currentEditId, 'timekeeper');
 }
 
 // ==================== АВТОРИЗАЦИЯ ====================
@@ -291,10 +292,11 @@ function renderPlayerList(filterText = '') {
     filtered.forEach(p => {
         const div = document.createElement('div'); div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
         const sColor = p.status === 'в обработке' ? 'var(--accent-color)' : (p.status === 'кикнут' ? 'var(--danger-color)' : 'var(--success-color)');
-        // [NEW] бейдж с количеством заметок
-        const noteCount = (AppState.playerNotes || []).filter(n => n.player_id === p.id).length;
-        const noteBadge = noteCount > 0 ? `<span style="color:var(--accent-color); font-size:0.7em; margin-top:2px;" title="${noteCount} заметок">📝 ${noteCount}</span>` : '';
-        div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold;">${p.nickname}</span><span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span>${noteBadge}</div><span style="color:#888; font-size:0.8em;">${p.discord_id || 'ID: ' + p.id}</span>`;
+        const coachCount = (AppState.playerNotes || []).filter(n => n.player_id === p.id && (n.category || 'coach') === 'coach').length;
+        const tkCount = (AppState.playerNotes || []).filter(n => n.player_id === p.id && (n.category || 'coach') === 'timekeeper').length;
+        const noteBadges = (coachCount > 0 ? `<span style="color:var(--accent-color); font-size:0.7em; margin-top:2px;" title="${coachCount} заметок тренера">📝 ${coachCount}</span>` : '')
+                         + (tkCount > 0 ? `<span style="color:#9cdcfe; font-size:0.7em; margin-top:2px; margin-left:4px;" title="${tkCount} заметок табельщика">📋 ${tkCount}</span>` : '');
+        div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold;">${p.nickname}</span><span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span>${noteBadges}</div><span style="color:#888; font-size:0.8em;">${p.discord_id || 'ID: ' + p.id}</span>`;
         div.onclick = () => selectPlayer(p); div.oncontextmenu = (e) => showContextMenu(e, p.id); container.appendChild(div);
     });
 }
@@ -313,7 +315,8 @@ async function selectPlayer(p) {
     document.getElementById('profile-kd').value = st.kd; document.getElementById('profile-kda').value = st.kda; document.getElementById('profile-points').value = st.points;
     const missed = AppState.attendance.filter(a => a.player_id === p.id && a.status === 'Не пришел');
     document.getElementById('player-missed-stats').style.display = 'block'; document.getElementById('pm-absent').innerText = missed.length;
-    renderPlayerNotes(p.id);   // [NEW]
+    renderNotesForPlayer(p.id, 'coach');
+    renderNotesForPlayer(p.id, 'timekeeper');
 }
 function clearForm() {
     currentEditId = null; document.getElementById('form-title').innerText = "Новый боец"; document.getElementById('edit-player-id').value = '';
@@ -321,7 +324,8 @@ function clearForm() {
     document.getElementById('profile-sledgehammer').checked = false;
     ['select-rifle','select-smg','select-sniper','select-pistol','select-machine-gun','select-shotgun','select-armor-combat','select-armor-combined','profile-status','profile-squad','profile-role'].forEach(id => { const el = document.getElementById(id); if (el.tomselect) el.tomselect.clear(true); else el.value = ''; });
     document.getElementById('btn-delete').style.display = 'none'; document.getElementById('player-missed-stats').style.display = 'none';
-    renderPlayerNotes(null);   // [NEW]
+    renderNotesForPlayer(null, 'coach');
+    renderNotesForPlayer(null, 'timekeeper');
     renderPlayerList();
 }
 async function saveProfile() {
@@ -361,7 +365,7 @@ async function loadMyProfile(player) {
     document.getElementById('my-attendance-body').innerHTML = row + '</tr>';
 }
 
-// ==================== ЗАМЕТКИ ТРЕНЕРА [NEW] ====================
+// ==================== ЗАМЕТКИ (ТРЕНЕР + ТАБЕЛЬЩИК) ====================
 async function refreshNotes() {
     const { data, error } = await supabaseClient.from('player_notes').select('*')
         .order('is_pinned', { ascending: false })
@@ -374,22 +378,27 @@ function escapeHtml(s) {
     return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function renderPlayerNotes(playerId) {
-    const wrap = document.getElementById('player-notes-wrapper'); if (!wrap) return;
+function renderNotesForPlayer(playerId, category) {
+    const isCoach = category === 'coach';
+    const wrapId = isCoach ? 'player-notes-wrapper' : 'player-timekeeper-notes-wrapper';
+    const listId = isCoach ? 'player-notes-list' : 'player-timekeeper-notes-list';
+    const wrap = document.getElementById(wrapId); if (!wrap) return;
     if (!playerId) { wrap.style.display = 'none'; return; }
     wrap.style.display = 'block';
-    const list = document.getElementById('player-notes-list'); if (!list) return;
-    const notes = (AppState.playerNotes || []).filter(n => n.player_id === playerId);
+    const list = document.getElementById(listId); if (!list) return;
+    const notes = (AppState.playerNotes || []).filter(n => n.player_id === playerId && (n.category || 'coach') === category);
     if (notes.length === 0) {
         list.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:0.85em; padding:15px;">Заметок пока нет</div>';
         return;
     }
+    const accentColor = isCoach ? 'var(--accent-color)' : '#9cdcfe';
+    const pinnedBg = isCoach ? 'rgba(255,152,0,0.1)' : 'rgba(156,220,254,0.1)';
     list.innerHTML = notes.map(n => {
         const date = n.created_at ? new Date(n.created_at).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
         const pinIcon = n.is_pinned ? '📌 ' : '';
         const pinBtn = `<button class="btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-muted); padding:2px 6px; font-size:0.75em;" title="${n.is_pinned ? 'Открепить' : 'Закрепить'}" onclick="togglePlayerNotePin(${n.id}, ${n.is_pinned})">${n.is_pinned ? '📌' : '📍'}</button>`;
         const delBtn = `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.75em;" onclick="deletePlayerNote(${n.id})">✕</button>`;
-        return `<div style="background:${n.is_pinned ? 'rgba(255,152,0,0.1)' : 'var(--input-bg)'}; border:1px solid ${n.is_pinned ? 'var(--accent-color)' : 'var(--border-color)'}; border-radius:var(--radius); padding:10px; margin-bottom:8px;">
+        return `<div style="background:${n.is_pinned ? pinnedBg : 'var(--input-bg)'}; border:1px solid ${n.is_pinned ? accentColor : 'var(--border-color)'}; border-radius:var(--radius); padding:10px; margin-bottom:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                 <span style="font-size:0.75em; color:var(--text-muted);">${pinIcon}${date}</span>
                 <div style="display:flex; gap:5px;">${pinBtn}${delBtn}</div>
@@ -399,15 +408,17 @@ function renderPlayerNotes(playerId) {
     }).join('');
 }
 
-async function addPlayerNote() {
+async function addPlayerNote(category = 'coach') {
     if (!canEdit() || !currentEditId) return;
-    const ta = document.getElementById('player-note-input'); if (!ta) return;
+    const inputId = category === 'coach' ? 'player-note-input' : 'player-timekeeper-note-input';
+    const ta = document.getElementById(inputId); if (!ta) return;
     const text = ta.value.trim(); if (!text) return showToast('Введите текст заметки', 'error');
-    const { error } = await supabaseClient.from('player_notes').insert([{ player_id: currentEditId, text, is_pinned: false }]);
+    const { error } = await supabaseClient.from('player_notes').insert([{ player_id: currentEditId, text, is_pinned: false, category }]);
     if (error) return showToast('Ошибка: ' + error.message, 'error');
     ta.value = '';
     await refreshNotes();
-    renderPlayerNotes(currentEditId);
+    renderNotesForPlayer(currentEditId, 'coach');
+    renderNotesForPlayer(currentEditId, 'timekeeper');
     renderPlayerList();
     showToast('Заметка добавлена', 'success');
 }
@@ -418,7 +429,8 @@ async function deletePlayerNote(noteId) {
     const { error } = await supabaseClient.from('player_notes').delete().eq('id', noteId);
     if (error) return showToast('Ошибка', 'error');
     await refreshNotes();
-    renderPlayerNotes(currentEditId);
+    renderNotesForPlayer(currentEditId, 'coach');
+    renderNotesForPlayer(currentEditId, 'timekeeper');
     renderPlayerList();
     showToast('Удалено', 'success');
 }
@@ -428,7 +440,8 @@ async function togglePlayerNotePin(noteId, currentPinned) {
     const { error } = await supabaseClient.from('player_notes').update({ is_pinned: !currentPinned }).eq('id', noteId);
     if (error) return showToast('Ошибка', 'error');
     await refreshNotes();
-    renderPlayerNotes(currentEditId);
+    renderNotesForPlayer(currentEditId, 'coach');
+    renderNotesForPlayer(currentEditId, 'timekeeper');
 }
 
 // ==================== СОСТАВ ====================
