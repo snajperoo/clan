@@ -288,6 +288,16 @@
                         <h3 style="color:var(--danger-color); margin-top:0; text-align:center; font-size:1em; text-transform: uppercase;">Прогулы (сезон)</h3>
                         <div style="display:flex; justify-content:center; font-size:1.1em;"><div>Не пришел: <strong id="pm-absent" style="color:var(--danger-color);">0</strong></div></div>
                     </div>
+                    <!-- [NEW] Заметки тренера (приватные) -->
+                    <div id="player-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
+                        <h3 style="color:var(--accent-color); margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📝 Заметки тренера</h3>
+                        <div id="player-notes-list" style="max-height:260px; overflow-y:auto; margin-bottom:10px;"></div>
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <textarea id="player-note-input" rows="2" placeholder="Например: плохо держит угол на Низине..." style="width:100%; padding:8px 12px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-family:'Courier New', monospace; font-size:0.95em; resize:vertical;"></textarea>
+                        </div>
+                        <button class="btn" onclick="addPlayerNote()" style="width:100%; padding:8px;">+ Добавить заметку</button>
+                    </div>
+                    <!-- [/NEW] -->
                     <div style="margin-top:25px; display:flex; gap:10px; flex-wrap:wrap;">
                         <button class="btn" onclick="saveProfile()">Сохранить</button>
                         <button class="btn" style="background:var(--accent-color); color:#000;" onclick="recalculatePlayerStats(currentEditId)">Пересчитать</button>
