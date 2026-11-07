@@ -3,12 +3,12 @@ const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz';
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ==================== ЕДИНЫЙ STATE (#10) ====================
+// ==================== ЕДИНЫЙ STATE ====================
 const AppState = {
     players: [], activePlayers: [],
     attendance: [], matchStats: [], matches: [], fines: [],
     tournaments: [], seasons: [],
-    upcomingMatches: [], pendingNicknames: [],
+    upcomingMatches: [],
     activeSeason: null, viewingSeason: null,
 };
 
@@ -82,7 +82,6 @@ function renderSeasonSelector() {
         if (AppState.viewingSeason && s.id === AppState.viewingSeason.id) o.selected = true;
         sel.appendChild(o);
     });
-    // Прогресс текущего просматриваемого сезона
     const progressEl = document.getElementById('season-progress');
     if (progressEl && AppState.viewingSeason) {
         const tCount = AppState.tournaments.length;
@@ -142,7 +141,6 @@ async function startNewSeason() {
     }]).select().single();
     if (error) { showToast('Ошибка: ' + error.message, 'error'); return; }
 
-    // Создаём Турнир 1 в новом сезоне
     await supabaseClient.from('tournaments').insert([{ tournament_number: 1, season_id: data.id }]);
 
     await loadSeasons();
@@ -193,12 +191,6 @@ async function refreshUpcoming() {
     AppState.upcomingMatches = data || [];
 }
 
-async function refreshPendingNicknames() {
-    if (!AppState.viewingSeason) { AppState.pendingNicknames = []; return; }
-    const { data } = await supabaseClient.from('pending_nicknames').select('*').eq('season_id', AppState.viewingSeason.id).eq('resolved', false).order('created_at', { ascending: false });
-    AppState.pendingNicknames = data || [];
-}
-
 function getMaxStage() {
     let max = 0;
     AppState.tournaments.forEach(t => { if (t.tournament_number * STAGES_PER_TOURNAMENT > max) max = t.tournament_number * STAGES_PER_TOURNAMENT; });
@@ -211,13 +203,13 @@ function getMaxStage() {
 async function refreshAll() {
     await loadSeasons();
     await Promise.all([refreshPlayers(), refreshTournaments()]);
-    await Promise.all([refreshAttendance(), refreshMatchStats(), refreshMatches(), refreshFines(), refreshUpcoming(), refreshPendingNicknames()]);
+    await Promise.all([refreshAttendance(), refreshMatchStats(), refreshMatches(), refreshFines(), refreshUpcoming()]);
     renderTops();
     renderPlayerList();
     fillPlayerSelects();
     renderSeasonSelector();
     populateProfileDropdowns();
-    // Обновление UI текущей активной вкладки
+    
     const active = document.querySelector('.tab-content.active');
     if (active) {
         const id = active.id;
@@ -228,7 +220,6 @@ async function refreshAll() {
         else if (id === 'tab-missed') loadAllMissed();
         else if (id === 'tab-analytics') loadAnalytics();
         else if (id === 'tab-calendar') loadCalendar();
-        else if (id === 'tab-pending') loadPendingNicknamesUI();
         else if (id === 'tab-compare') initCompareTab();
         else if (id === 'tab-roster') initDragAndDrop();
     }
@@ -274,7 +265,6 @@ function openTab(evt, tabName) {
     if (tabName === 'tab-stats') loadMatchStats();
     if (tabName === 'tab-analytics') loadAnalytics();
     if (tabName === 'tab-calendar') loadCalendar();
-    if (tabName === 'tab-pending') loadPendingNicknamesUI();
 }
 
 function goToPlayerProfile(playerId) {
@@ -391,9 +381,6 @@ async function selectPlayer(p) {
     document.getElementById('edit-player-id').value = p.id;
     document.getElementById('profile-nickname').value = p.nickname || '';
     document.getElementById('profile-discord-id').value = p.discord_id || '';
-    document.getElementById('profile-kd').value = p.kd || 0;
-    document.getElementById('profile-kda').value = p.kda || 0;
-    document.getElementById('profile-points').value = p.points || 0;
     document.getElementById('profile-sledgehammer').checked = p.has_sledgehammer || false;
     document.getElementById('profile-speed-combat').value = p.speed_combat || ''; 
     document.getElementById('profile-penetration-combat').value = p.penetration_combat || '';
@@ -409,7 +396,6 @@ async function selectPlayer(p) {
     document.getElementById('btn-delete').style.display = 'block';
     renderPlayerList();
     
-    // Сезонные статы
     const st = computeSeasonStats(p.id);
     document.getElementById('profile-kd').value = st.kd;
     document.getElementById('profile-kda').value = st.kda;
@@ -745,7 +731,6 @@ async function updateMatchStat(playerId, stageNum, field, value) {
 
 async function recalculatePlayerStats(playerId) {
     if (!playerId) return;
-    // За всё время
     const { data: allStats } = await supabaseClient.from('match_stats').select('*').eq('player_id', playerId);
     if (allStats && allStats.length > 0) {
         let tK = 0, tD = 0, tA = 0, tP = 0;
@@ -832,7 +817,7 @@ async function deleteTournament() {
 function addStage()    { addTournament(); }
 function deleteStage() { deleteTournament(); }
 
-// ==================== СРАВНЕНИЕ (#15) ====================
+// ==================== СРАВНЕНИЕ ====================
 let compareSelection = [];
 
 function initCompareTab() {
@@ -854,7 +839,6 @@ function initCompareTab() {
         onChange: () => renderComparison()
     });
 
-    // Период
     const periodSel = document.getElementById('compare-period');
     if (periodSel) {
         if (periodSel.tomselect) periodSel.tomselect.destroy();
@@ -904,7 +888,6 @@ function renderComparison() {
     const players = ids.map(id => AppState.players.find(x => x.id === id)).filter(Boolean);
     const statData = players.map(p => ({ player: p, stats: getCompareStatsForPeriod(p.id, period) }));
 
-    // ============ Бар-чарт (нормализованный) ============
     const metrics = ['КД', 'КДА', 'Очки'];
     const colors = ['#4caf50', '#ff9800', '#2196f3', '#e91e63'];
 
@@ -917,7 +900,6 @@ function renderComparison() {
     const canvasId = 'compareChart';
     const chartHtml = `<div style="width:100%; height:300px; margin-bottom:20px;"><canvas id="${canvasId}"></canvas></div>`;
 
-    // ============ Таблица ============
     let tableHtml = '<table class="compare-table"><thead><tr><th>Характеристика</th>';
     players.forEach(p => { tableHtml += `<th>${p.nickname}${p.squad ? ` <span style="color:var(--text-muted); font-size:0.8em;">(${p.squad})</span>` : ''}</th>`; });
     tableHtml += '</tr></thead><tbody>';
@@ -950,7 +932,6 @@ function renderComparison() {
 
     container.innerHTML = chartHtml + tableHtml;
 
-    // ============ Рисуем чарт ============
     if (compareChart) compareChart.destroy();
     compareChart = new Chart(document.getElementById(canvasId), {
         type: 'bar',
@@ -1142,14 +1123,14 @@ function renderHistoryChart(wins, losses, draws) {
     });
 }
 
-// ==================== КАЛЕНДАРЬ (#13) ====================
+// ==================== КАЛЕНДАРЬ ====================
 async function loadCalendar() {
     const container = document.getElementById('calendar-list');
     if (!container) return;
     await refreshUpcoming();
     
     if (AppState.upcomingMatches.length === 0) {
-        container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted); text-transform:uppercase;">Матчей не запланировано</div>';
+        container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted); text-transform:uppercase;">Турниров не запланировано</div>';
         return;
     }
 
@@ -1162,13 +1143,13 @@ async function loadCalendar() {
         const dateStr = d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', weekday: 'long' });
         const daysUntil = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
         const badge = isPast ? '' : (daysUntil === 0 ? '<span style="color:var(--danger-color); font-weight:bold;">СЕГОДНЯ</span>' : daysUntil === 1 ? '<span style="color:var(--accent-color);">ЗАВТРА</span>' : `<span style="color:var(--text-muted);">через ${daysUntil} дн.</span>`);
-        const typeLabel = m.match_type === 'tournament' ? '🏆 Турнир' : (m.match_type === 'friendly' ? '🤝 Товарищеский' : '⚔️ Клан-война');
         const tourInfo = m.tournament_number ? `<div style="font-size:0.8em; color:var(--accent-color);">Турнир ${m.tournament_number}${m.stage_number ? ` · Этап ${m.stage_number}` : ''}</div>` : '';
         const adminActions = canEdit() ? `<button class="btn btn-danger" style="padding:3px 8px; font-size:0.75em; margin-top:8px;" onclick="deleteUpcoming(${m.id})">Удалить</button>` : '';
+        
         return `<div class="calendar-card" style="opacity:${isPast ? 0.5 : 1};">
             ${tourInfo}
             <div style="color:var(--accent-color); font-weight:bold; font-size:1.1em; margin-bottom:5px;">${dateStr}${m.match_time ? ' · ' + m.match_time : ''}</div>
-            <div style="font-size:1.2em; margin-bottom:5px;">${typeLabel}${m.enemy_name ? ` vs <strong>${m.enemy_name}</strong>` : ''}</div>
+            <div style="font-size:1.2em; margin-bottom:5px;">🏆 Турнир</div>
             ${badge}
             ${m.notes ? `<div style="color:var(--text-muted); font-size:0.9em; margin-top:5px; font-style:italic;">${m.notes}</div>` : ''}
             ${adminActions}
@@ -1177,7 +1158,7 @@ async function loadCalendar() {
 
     let html = '';
     if (upcoming.length > 0) {
-        html += '<h3 style="color:var(--accent-color); text-transform:uppercase; margin-bottom:15px;">Ближайшие матчи</h3>';
+        html += '<h3 style="color:var(--accent-color); text-transform:uppercase; margin-bottom:15px;">Ближайшие турниры</h3>';
         html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:15px; margin-bottom:30px;">${upcoming.map(m => renderCard(m)).join('')}</div>`;
     }
     if (past.length > 0) {
@@ -1191,8 +1172,6 @@ async function addUpcomingMatch() {
     if (!canEdit()) return;
     const date = document.getElementById('cal-date').value;
     const time = document.getElementById('cal-time').value;
-    const enemy = document.getElementById('cal-enemy').value.trim();
-    const type = document.getElementById('cal-type').value;
     const notes = document.getElementById('cal-notes').value.trim();
     const tourNum = document.getElementById('cal-tournament').value;
     const stageNum = document.getElementById('cal-stage').value;
@@ -1200,16 +1179,15 @@ async function addUpcomingMatch() {
     if (!date) return showToast('Укажите дату', 'error');
 
     const { error } = await supabaseClient.from('upcoming_matches').insert([{
-        match_date: date, match_time: time || null, enemy_name: enemy || null,
-        match_type: type, notes: notes || null,
+        match_date: date, match_time: time || null,
+        match_type: 'tournament', notes: notes || null,
         tournament_number: tourNum ? parseInt(tourNum) : null,
         stage_number: stageNum ? parseInt(stageNum) : null,
         season_id: AppState.viewingSeason.id
     }]);
 
     if (error) { showToast('Ошибка: ' + error.message, 'error'); return; }
-    showToast('Матч добавлен в календарь', 'success');
-    document.getElementById('cal-enemy').value = '';
+    showToast('Турнир добавлен в календарь', 'success');
     document.getElementById('cal-notes').value = '';
     await refreshUpcoming();
     loadCalendar();
@@ -1221,91 +1199,6 @@ async function deleteUpcoming(id) {
     await refreshUpcoming();
     loadCalendar();
     showToast('Удалено', 'success');
-}
-
-// ==================== НЕОПОЗНАННЫЕ (#18) ====================
-async function loadPendingNicknamesUI() {
-    const tbody = document.getElementById('pending-tbody');
-    if (!tbody) return;
-    await refreshPendingNicknames();
-    if (AppState.pendingNicknames.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--success-color);">Неопознанных нет ✅</td></tr>';
-        return;
-    }
-    tbody.innerHTML = '';
-    AppState.pendingNicknames.forEach(pn => {
-        tbody.innerHTML += `<tr>
-            <td><strong>${pn.nickname}</strong></td>
-            <td>${pn.stage_number}</td>
-            <td>${pn.kills}/${pn.deaths}/${pn.assists}</td>
-            <td>${pn.points}</td>
-            <td>
-                <button class="btn" style="padding:4px 8px; font-size:0.8em;" onclick="resolvePendingCreate(${pn.id})">Создать</button>
-                <button class="btn" style="padding:4px 8px; font-size:0.8em; background:var(--accent-color); color:#000;" onclick="resolvePendingLink(${pn.id})">Связать</button>
-                <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8em;" onclick="resolvePendingIgnore(${pn.id})">Игнор</button>
-            </td>
-        </tr>`;
-    });
-}
-
-async function resolvePendingCreate(pnId) {
-    if (!canEdit()) return;
-    const pn = AppState.pendingNicknames.find(x => x.id === pnId);
-    if (!pn) return;
-    const { data, error } = await supabaseClient.from('players').insert([{
-        nickname: pn.nickname, status: 'в обработке', kd: 0, kda: 0, points: 0
-    }]).select().single();
-    if (error) { showToast('Ошибка: ' + error.message, 'error'); return; }
-
-    await supabaseClient.from('match_stats').upsert({
-        player_id: data.id, stage_number: pn.stage_number,
-        season_id: pn.season_id, kills: pn.kills, deaths: pn.deaths, assists: pn.assists, points: pn.points
-    }, { onConflict: 'season_id, player_id, stage_number' });
-    await supabaseClient.from('attendance').upsert({
-        player_id: data.id, tournament_number: pn.stage_number,
-        season_id: pn.season_id, status: 'Пришел'
-    }, { onConflict: 'season_id, player_id, tournament_number' });
-    await supabaseClient.from('pending_nicknames').update({ resolved: true, player_id: data.id }).eq('id', pnId);
-
-    showToast(`Игрок ${pn.nickname} создан`, 'success');
-    await refreshAll();
-    loadPendingNicknamesUI();
-}
-
-async function resolvePendingLink(pnId) {
-    if (!canEdit()) return;
-    const pn = AppState.pendingNicknames.find(x => x.id === pnId);
-    if (!pn) return;
-    const nickPrompt = prompt('Введите имя игрока из базы (или его Discord ID):');
-    if (!nickPrompt) return;
-    const p = AppState.players.find(x =>
-        x.nickname.toLowerCase().trim() === nickPrompt.toLowerCase().trim() ||
-        (x.discord_id && x.discord_id.toString() === nickPrompt.trim())
-    );
-    if (!p) return showToast('Игрок не найден', 'error');
-
-    await supabaseClient.from('match_stats').upsert({
-        player_id: p.id, stage_number: pn.stage_number,
-        season_id: pn.season_id, kills: pn.kills, deaths: pn.deaths, assists: pn.assists, points: pn.points
-    }, { onConflict: 'season_id, player_id, stage_number' });
-    await supabaseClient.from('attendance').upsert({
-        player_id: p.id, tournament_number: pn.stage_number,
-        season_id: pn.season_id, status: 'Пришел'
-    }, { onConflict: 'season_id, player_id, tournament_number' });
-    await supabaseClient.from('pending_nicknames').update({ resolved: true, player_id: p.id }).eq('id', pnId);
-
-    await recalculatePlayerStats(p.id);
-    showToast(`Связано с ${p.nickname}`, 'success');
-    await refreshAll();
-    loadPendingNicknamesUI();
-}
-
-async function resolvePendingIgnore(pnId) {
-    if (!canEdit()) return;
-    await supabaseClient.from('pending_nicknames').update({ resolved: true }).eq('id', pnId);
-    await refreshPendingNicknames();
-    loadPendingNicknamesUI();
-    showToast('Игнорировано', 'info');
 }
 
 // ==================== ШТРАФЫ ====================
@@ -1456,15 +1349,7 @@ async function confirmPhotoUpload() {
                     await supabaseClient.from('match_stats').upsert({ player_id: pl.id, stage_number: stageNum, season_id: sid, kills: p.kills || 0, deaths: p.deaths || 0, assists: p.assists || 0, points: p.points || 0 }, { onConflict: 'season_id, player_id, stage_number' });
                     await recalculatePlayerStats(pl.id);
                     added++;
-                } else { notFound.push(p); }
-            }
-
-            // Запись неопознанных в pending_nicknames
-            for (const nf of notFound) {
-                await supabaseClient.from('pending_nicknames').insert([{
-                    nickname: nf.nickname, stage_number: stageNum, season_id: sid,
-                    kills: nf.kills || 0, deaths: nf.deaths || 0, assists: nf.assists || 0, points: nf.points || 0
-                }]);
+                } else { notFound.push(p.nickname); }
             }
 
             if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
@@ -1479,7 +1364,7 @@ async function confirmPhotoUpload() {
             AppState.activePlayers.forEach(pl => { if (!presentIds.has(pl.id)) pendingAbsentPlayers.push(pl); });
 
             statusDiv.innerHTML = `ПРИШЛО: ${added}.`;
-            if (notFound.length > 0) statusDiv.innerHTML += `<br>НЕ НАЙДЕНЫ: ${notFound.map(n=>n.nickname).join(', ')}`;
+            if (notFound.length > 0) statusDiv.innerHTML += `<br>НЕ НАЙДЕНЫ (пропущены): ${notFound.join(', ')}`;
 
             if (pendingAbsentPlayers.length > 0) {
                 currentAbsentStage = stageNum;
@@ -1665,5 +1550,22 @@ async function clearAllData() {
     } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
 }
 
+// ==================== REALTIME ПОДПИСКА ====================
+let realtimeChannel = null;
+function initRealtime() {
+    if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+    realtimeChannel = supabaseClient
+        .channel('portal-realtime-sync')
+        .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+            console.log('Realtime изменение:', payload);
+            refreshAll();
+        })
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') console.log('✅ Realtime подключён');
+        });
+}
+
 // ==================== СТАРТ ====================
-refreshAll();
+refreshAll().then(() => {
+    initRealtime();
+});
