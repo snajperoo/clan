@@ -3,7 +3,7 @@ const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz';
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ==================== РАНГИ, НАГРАДЫ И КАРТЫ ====================
+// ==================== КОНСТАНТЫ ====================
 const TIERS = [
     { name: 'S', min: 2100, win: 7000,  loss: 3000 },
     { name: 'A', min: 2000, win: 4700,  loss: 1800 },
@@ -13,10 +13,8 @@ const TIERS = [
     { name: 'E', min: 0,    win: 1250,  loss: 250  }
 ];
 
-// ТУРНИРНЫЕ КАРТЫ
 const TOURNAMENT_MAPS = ['Хвойный', 'Низина', 'Малая Бердовка'];
 
-// ==================== ЕДИНЫЙ STATE ====================
 const AppState = {
     players: [], activePlayers: [],
     attendance: [], matchStats: [], matches: [], fines: [],
@@ -39,7 +37,9 @@ const TOURNAMENTS_PER_SEASON = 12;
 const STAGES_PER_TOURNAMENT = 3;
 const RATING_CHANGE = 50;
 const START_RATING = 1000;
-const GEARS_THRESHOLD_PERCENT = 20;
+
+// Настраиваемый порог гильз (по умолчанию 20%)
+let gearsThresholdPercent = parseFloat(localStorage.getItem('gearsThresholdPercent')) || 20;
 
 const SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -50,17 +50,15 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
+// ==================== ХЕЛПЕРЫ ====================
 function getTierByRating(rating) {
     return TIERS.find(t => rating >= t.min) || TIERS[TIERS.length - 1];
 }
-
-// ==================== ХЕЛПЕРЫ ====================
 function getLocalDateString(date = new Date()) {
     const offset = date.getTimezoneOffset();
     const localDate = new Date(date.getTime() - (offset * 60 * 1000));
     return localDate.toISOString().split('T')[0];
 }
-
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -71,19 +69,27 @@ function showToast(message, type = 'success') {
     container.appendChild(toast);
     setTimeout(() => { toast.remove(); }, 3000);
 }
-
 function initSearchableSelect(id, direction = 'up') {
     const el = document.getElementById(id);
     if (!el) return;
     if (el.tomselect) el.tomselect.destroy();
     new TomSelect(el, { create: false, sortField: { field: "text", direction: "asc" }, maxItems: 1, dropdownDirection: direction });
 }
-
 function isViewingActive() {
     return AppState.viewingSeason && AppState.viewingSeason.is_active;
 }
 function canEdit() {
     return isAdmin && isViewingActive();
+}
+function updateGearsThreshold(val) {
+    let v = parseFloat(val);
+    if (isNaN(v) || v < 0) v = 0;
+    if (v > 100) v = 100;
+    gearsThresholdPercent = v;
+    localStorage.setItem('gearsThresholdPercent', v);
+    document.getElementById('gears-threshold-input').value = v;
+    refreshAll(); 
+    showToast(`Порог гильз обновлен: ${v}%`, 'success');
 }
 
 // ==================== КОНТЕКСТНОЕ МЕНЮ ====================
@@ -192,7 +198,7 @@ function calculateAllMatchDetails() {
         const c = m.clan_score || 0, e = m.enemy_points || 0, total = c + e;
         if (c > e) ratingChange = RATING_CHANGE;
         else if (c < e) ratingChange = -RATING_CHANGE;
-        if (total > 0 && (c / total) >= (GEARS_THRESHOLD_PERCENT / 100)) {
+        if (total > 0 && (c / total) >= (gearsThresholdPercent / 100)) {
             if (c > e) clanGears = tierBefore.win;
             else if (c < e) clanGears = tierBefore.loss;
         }
@@ -210,7 +216,7 @@ function calculatePlayerGears(playerId) {
         if (!details || details.clanGears === 0) return;
         const clanScore = match.clan_score || 0, playerPoints = stat.points || 0;
         if (clanScore === 0) return;
-        if ((playerPoints / clanScore) < (GEARS_THRESHOLD_PERCENT / 100)) return;
+        if ((playerPoints / clanScore) < (gearsThresholdPercent / 100)) return;
         totalGears += details.clanGears;
     });
     return totalGears;
@@ -829,3 +835,301 @@ async function addUpcomingMatch() {
     if (!canEdit()) return; const date = document.getElementById('cal-date').value, time = document.getElementById('cal-time').value, notes = document.getElementById('cal-notes').value.trim(), tour = document.getElementById('cal-tournament').value, stage = document.getElementById('cal-stage').value;
     if (!date) return showToast('Укажите дату', 'error');
     if (tour && !stage) {
+        for (let i = 0; i < 3; i++) { await supabaseClient.from('upcoming_matches').insert([{ match_date: date, match_time: time || null, match_type: 'tournament', notes: notes || null, tournament_number: parseInt(tour), stage_number: (parseInt(tour) - 1) * 3 + i + 1, season_id: AppState.viewingSeason.id }]); }
+        showToast(`Турнир ${tour} добавлен (3 этапа)`, 'success');
+    } else {
+        const { error } = await supabaseClient.from('upcoming_matches').insert([{ match_date: date, match_time: time || null, match_type: 'tournament', notes: notes || null, tournament_number: tour ? parseInt(tour) : null, stage_number: stage ? parseInt(stage) : null, season_id: AppState.viewingSeason.id }]);
+        if (error) return showToast('Ошибка', 'error'); showToast('Матч добавлен', 'success');
+    }
+    document.getElementById('cal-notes').value = ''; await refreshUpcoming(); loadCalendar();
+}
+async function deleteUpcoming(id) {
+    if (!canEdit() || !confirm('Удалить запись?')) return; await supabaseClient.from('upcoming_matches').delete().eq('id', id); await refreshUpcoming(); loadCalendar(); showToast('Удалено', 'success');
+}
+
+// ==================== ШТРАФЫ ====================
+async function loadFines() {
+    const tb = document.getElementById('fines-table-body'); if (!tb) return; await refreshFines();
+    tb.innerHTML = AppState.fines.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Нет штрафов</td></tr>' : '';
+    AppState.fines.forEach(f => {
+        const player = AppState.players.find(p => p.id === f.player_id), canToggle = canEdit();
+        tb.innerHTML += `<tr><td><strong>${player ? player.nickname : 'Неизвестный'}</strong></td><td>${f.reason}</td><td style="color:var(--danger-color);">${f.amount} ₽</td><td class="${f.status === 'open' ? 'status-open' : 'status-closed'}">${f.status === 'open' ? 'Открыт' : 'Закрыт'}</td><td>${canToggle ? `<button class="btn" onclick="toggleFineStatus(${f.id}, '${f.status}')">${f.status === 'open' ? 'Закрыть' : 'Открыть'}</button><button class="btn btn-danger" onclick="deleteFine(${f.id})">X</button>` : '—'}</td></tr>`;
+    });
+}
+async function addFine() {
+    if (!canEdit()) return; const pid = document.getElementById('fine-player').value, r = document.getElementById('fine-reason').value.trim(), a = parseInt(document.getElementById('fine-amount').value) || 0;
+    if (!pid || !r) return showToast('Выберите игрока и причину', 'error');
+    const { error } = await supabaseClient.from('fines').insert([{ player_id: pid, reason: r, amount: a, status: 'open' }]);
+    if (error) showToast('Ошибка', 'error'); else { showToast('Штраф добавлен', 'success'); document.getElementById('fine-reason').value = ''; document.getElementById('fine-amount').value = ''; loadFines(); }
+}
+async function toggleFineStatus(id, st) { if (!canEdit()) return; await supabaseClient.from('fines').update({ status: st === 'open' ? 'closed' : 'open' }).eq('id', id); loadFines(); }
+async function deleteFine(id) { if (!canEdit()) return; if (confirm('Удалить штраф?')) { await supabaseClient.from('fines').delete().eq('id', id); loadFines(); } }
+
+// ==================== ЗАГРУЗКА ФОТО ====================
+function openPhotoModal(input) {
+    const files = input.files; if (!files || files.length === 0) return;
+    currentPhotoFiles = Array.from(files);
+    document.getElementById('photo-modal').style.display = 'flex';
+    const previewContainer = document.getElementById('photo-preview'); previewContainer.innerHTML = '';
+    if (currentPhotoFiles.length === 1) {
+        const r = new FileReader(); r.onload = (e) => { previewContainer.innerHTML = `<img id="preview-img" src="${e.target.result}" style="max-width: 100%; max-height: 150px; border-radius: var(--radius); border: 1px solid var(--border-color);">`; previewContainer.style.display = 'block'; };
+        r.readAsDataURL(currentPhotoFiles[0]);
+        document.getElementById('modal-stage-label').innerText = 'Этап'; document.getElementById('modal-stage').style.display = 'block'; document.getElementById('multi-stage-hint').style.display = 'none';
+    } else {
+        let listHtml = '<ul style="text-align:left; color:var(--text-muted); font-size:0.9em; padding-left:20px; margin:0;">';
+        currentPhotoFiles.forEach((f) => listHtml += `<li>${f.name}</li>`); listHtml += '</ul>';
+        previewContainer.innerHTML = `<div style="background:var(--input-bg); padding:10px; border-radius:var(--radius); border:1px solid var(--border-color);"><div style="color:var(--success-color); font-weight:bold; margin-bottom:5px;">Выбрано файлов: ${currentPhotoFiles.length}</div>${listHtml}</div>`;
+        previewContainer.style.display = 'block';
+        document.getElementById('modal-stage-label').innerText = 'Начальный этап'; document.getElementById('multi-stage-hint').style.display = 'block';
+    }
+}
+function closePhotoModal() {
+    document.getElementById('photo-modal').style.display = 'none'; document.getElementById('attendance-photo').value = '';
+    document.getElementById('photo-preview').style.display = 'none'; document.getElementById('photo-preview').innerHTML = ''; currentPhotoFiles = [];
+}
+async function saveAbsentStatuses() {
+    if (!canEdit()) return; const btn = document.getElementById('save-absent-btn'); btn.disabled = true; btn.innerText = '...'; const sid = AppState.viewingSeason.id;
+    for (const p of pendingAbsentPlayers) {
+        const sel = document.getElementById(`absent-status-${p.id}`), status = sel ? sel.value : 'Не пришел';
+        await supabaseClient.from('attendance').upsert({ player_id: p.id, tournament_number: currentAbsentStage, status, season_id: sid }, { onConflict: 'season_id, player_id, tournament_number' });
+    }
+    document.getElementById('absent-modal').style.display = 'none'; document.getElementById('photo-status').innerHTML = `СТАТУСЫ ОБНОВЛЕНЫ.`;
+    await refreshAll(); btn.disabled = false; btn.innerText = 'ПОДТВЕРДИТЬ'; showToast('Статусы сохранены!', 'success');
+}
+async function confirmPhotoUpload() {
+    if (currentPhotoFiles.length === 0 || !canEdit()) return;
+    const startStage = parseInt(document.getElementById('modal-stage').value), statusDiv = document.getElementById('photo-status'), sid = AppState.viewingSeason.id;
+    document.getElementById('photo-modal').style.display = 'none';
+    const compressImage = (file) => new Promise((resolve) => {
+        const reader = new FileReader(); reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image(); img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200;
+                const scale = MAX_WIDTH / img.width; canvas.width = MAX_WIDTH; canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+            };
+        };
+    });
+    const normalizeStr = (str) => !str ? '' : str.toLowerCase().replace(/[\s\-_.,'"]/g, '').replace(/[а]/g, 'a').replace(/[е]/g, 'e').replace(/[о]/g, 'o').replace(/[р]/g, 'p').replace(/[с]/g, 'c').replace(/[у]/g, 'y').replace(/[х]/g, 'x').replace(/[к]/g, 'k').replace(/[м]/g, 'm').replace(/[т]/g, 't').replace(/[в]/g, 'b').replace(/[н]/g, 'h');
+    const levenshtein = (a, b) => {
+        if (a.length === 0) return b.length; if (b.length === 0) return a.length;
+        const matrix = []; for (let i = 0; i <= b.length; i++) matrix[i] = [i]; for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) { for (let j = 1; j <= a.length; j++) { if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1]; else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1); } }
+        return matrix[b.length][a.length];
+    };
+    const findPlayerSmart = (aiNickname) => {
+        if (!aiNickname) return null; const aiClean = normalizeStr(aiNickname);
+        let found = AppState.activePlayers.find(p => normalizeStr(p.nickname) === aiClean); if (found) return found;
+        let bestMatch = null, bestDistance = Infinity;
+        AppState.activePlayers.forEach(p => {
+            const dbClean = normalizeStr(p.nickname);
+            if ((dbClean.includes(aiClean) || aiClean.includes(dbClean)) && Math.abs(dbClean.length - aiClean.length) <= 3) { bestMatch = p; bestDistance = 0; return; }
+            const distance = levenshtein(dbClean, aiClean); const maxAllowedDist = aiClean.length > 6 ? 2 : 1;
+            if (distance <= maxAllowedDist && distance < bestDistance) { bestDistance = distance; bestMatch = p; }
+        });
+        return bestMatch;
+    };
+    let totalAdded = 0, allNotFound = [], globalPresentIds = new Set();
+    try {
+        for (let i = 0; i < currentPhotoFiles.length; i++) {
+            const file = currentPhotoFiles[i], stageNum = startStage + i;
+            statusDiv.innerHTML = `ОБРАБОТКА ФАЙЛА ${i + 1} ИЗ ${currentPhotoFiles.length} (Этап ${stageNum})...`;
+            const base64 = await compressImage(file);
+            const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/recognize', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` }, body: JSON.stringify({ image: base64 }) });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            const result = await res.json();
+            if (result.players && result.players.length > 0) {
+                let added = 0, notFound = [], presentIds = new Set();
+                for (const p of result.players) {
+                    const pl = findPlayerSmart(p.nickname);
+                    if (pl) {
+                        presentIds.add(pl.id); globalPresentIds.add(pl.id);
+                        await supabaseClient.from('attendance').upsert({ player_id: pl.id, tournament_number: stageNum, status: 'Пришел', season_id: sid }, { onConflict: 'season_id, player_id, tournament_number' });
+                        await supabaseClient.from('match_stats').upsert({ player_id: pl.id, stage_number: stageNum, season_id: sid, kills: p.kills || 0, deaths: p.deaths || 0, assists: p.assists || 0, points: p.points || 0 }, { onConflict: 'season_id, player_id, stage_number' });
+                        await recalculatePlayerStats(pl.id); added++;
+                    } else { notFound.push(p.nickname); }
+                }
+                if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
+                    await supabaseClient.from('clan_matches').upsert({ stage_number: stageNum, match_date: getLocalDateString(), clan_score: result.clan_score, enemy_points: result.enemy_score, enemy_name: result.enemy_name || 'Неизвестный враг', season_id: sid }, { onConflict: 'season_id, stage_number' });
+                }
+                totalAdded += added; allNotFound.push(...notFound);
+            }
+        }
+        pendingAbsentPlayers = []; AppState.activePlayers.forEach(pl => { if (!globalPresentIds.has(pl.id)) pendingAbsentPlayers.push(pl); });
+        statusDiv.innerHTML = `УСПЕШНО ПРИШЛО: ${totalAdded}.`;
+        if (allNotFound.length > 0) statusDiv.innerHTML += `<br>НЕ НАЙДЕНЫ: ${[...new Set(allNotFound)].join(', ')}`;
+        if (pendingAbsentPlayers.length > 0) {
+            currentAbsentStage = startStage;
+            const listContainer = document.getElementById('absent-players-list'); listContainer.innerHTML = '';
+            pendingAbsentPlayers.forEach(p => {
+                const row = document.createElement('div'); row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid var(--border-color); margin-bottom:5px;';
+                row.innerHTML = `<span style="font-weight:bold;">${p.nickname}</span><select id="absent-status-${p.id}" style="padding:5px; border-radius:var(--radius); background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color);"><option value="Не пришел">Не пришел</option><option value="Отгул">Отгул</option></select>`;
+                listContainer.appendChild(row);
+            });
+            document.getElementById('absent-modal').style.display = 'flex'; statusDiv.innerHTML += `<br>ПОДТВЕРДИТЕ СТАТУСЫ (${pendingAbsentPlayers.length})`;
+        } else { await refreshAll(); showToast(`Распознано ${totalAdded} игроков!`, 'success'); }
+    } catch (err) { console.error(err); statusDiv.innerHTML = `ОШИБКА: ${err.message}`; showToast('Ошибка нейросети', 'error'); }
+    closePhotoModal(); document.getElementById('attendance-photo').value = '';
+}
+
+// ==================== АНАЛИТИКА ====================
+async function loadAnalytics() {
+    const active = AppState.activePlayers;
+    const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10);
+    document.querySelector('#top-kd-table tbody').innerHTML = topKD.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kd}</td></tr>`).join('');
+    const topKDA = [...active].sort((a, b) => b.kda - a.kda).slice(0, 10);
+    document.querySelector('#top-kda-table tbody').innerHTML = topKDA.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kda}</td></tr>`).join('');
+    const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
+    document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
+    
+    // СТАТИСТИКА ПО КАРТАМ
+    const mapStats = {};
+    TOURNAMENT_MAPS.forEach(m => mapStats[m] = { wins: 0, losses: 0, draws: 0, total: 0 });
+    AppState.matches.forEach(m => {
+        if (m.map_name && mapStats[m.map_name]) {
+            const c = m.clan_score || 0, e = m.enemy_points || 0;
+            if (c > e) mapStats[m.map_name].wins++;
+            else if (c < e) mapStats[m.map_name].losses++;
+            else mapStats[m.map_name].draws++;
+            mapStats[m.map_name].total++;
+        }
+    });
+    const mapTbody = document.querySelector('#map-stats-table tbody');
+    if (mapTbody) {
+        mapTbody.innerHTML = Object.entries(mapStats).map(([map, s]) => {
+            const wr = s.total === 0 ? 0 : Math.round((s.wins / s.total) * 100);
+            const color = wr >= 50 ? 'var(--success-color)' : 'var(--danger-color)';
+            return `<tr><td>${map}</td><td>${s.total}</td><td>${s.wins}</td><td style="color:${color}; font-weight:bold;">${wr}%</td></tr>`;
+        }).join('');
+    }
+
+    document.getElementById('stat-total-players').innerText = active.length;
+    const inS = active.filter(p => p.squad && p.squad.trim() !== '').length;
+    document.getElementById('stat-in-squads').innerText = inS;
+    document.getElementById('stat-free').innerText = active.length - inS;
+
+    if (active.length > 0) {
+        const sumKd = active.reduce((a, p) => a + (p.kd || 0), 0), sumKda = active.reduce((a, p) => a + (p.kda || 0), 0), sumPts = active.reduce((a, p) => a + (p.points || 0), 0);
+        document.getElementById('avg-kd-total').innerText = (sumKd / active.length).toFixed(2);
+        document.getElementById('avg-kda-total').innerText = (sumKda / active.length).toFixed(2);
+        document.getElementById('avg-points-total').innerText = Math.round(sumPts / active.length);
+        if (AppState.matchStats.length > 0) {
+            let tK = 0, tD = 0, tA = 0, tP = 0;
+            AppState.matchStats.forEach(s => { tK += s.kills || 0; tD += s.deaths || 0; tA += s.assists || 0; tP += s.points || 0; });
+            document.getElementById('avg-kd-stage').innerText = (tD === 0 ? tK : tK / tD).toFixed(2);
+            document.getElementById('avg-kda-stage').innerText = (tD === 0 ? (tK + tA) : (tK + tA) / tD).toFixed(2);
+            document.getElementById('avg-points-stage').innerText = Math.round(tP / Math.max(...AppState.matchStats.map(s => s.stage_number)));
+        }
+    }
+    const thresholdInput = document.getElementById('gears-threshold-input');
+    if (thresholdInput) thresholdInput.value = gearsThresholdPercent;
+}
+
+const ANALYTICS_CHANNEL_ID = '1567231595797028874';
+const ROSTER_CHANNEL_ID = '1567230953833627668';
+
+async function sendAnalyticsScreenshot() {
+    const active = AppState.activePlayers; if (!active) return showToast('Нет данных', 'error');
+    const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10), topKDA = [...active].sort((a, b) => b.kda - a.kda).slice(0, 10), topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
+    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+    canvas.width = 1200; canvas.height = 680; ctx.fillStyle = '#0d0f0d'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function drawTable(title, data, x, y, width, colTitle, fieldKey) {
+        ctx.fillStyle = '#1a201a'; ctx.beginPath(); ctx.roundRect(x, y, width, 375, 8); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+        ctx.fillStyle = '#ff9800'; ctx.font = 'bold 20px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(title, x + width / 2, y + 35);
+        ctx.fillStyle = '#7a857a'; ctx.font = 'bold 14px Segoe UI'; ctx.textAlign = 'left'; ctx.fillText('#', x + 25, y + 75); ctx.fillText('Боец', x + 70, y + 75);
+        ctx.textAlign = 'right'; ctx.fillText(colTitle, x + width - 25, y + 75); ctx.beginPath(); ctx.moveTo(x + 25, y + 90); ctx.lineTo(x + width - 25, y + 90); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+        ctx.font = '14px Segoe UI';
+        data.forEach((p, i) => {
+            const rowY = y + 115 + i * 25; ctx.fillStyle = '#ff9800'; ctx.textAlign = 'left'; ctx.fillText(i + 1, x + 25, rowY); ctx.fillStyle = '#d1d5d1'; ctx.fillText(p.nickname, x + 70, rowY); ctx.textAlign = 'right'; ctx.fillText(p[fieldKey] !== undefined ? p[fieldKey] : 0, x + width - 25, rowY);
+            if (i < data.length - 1) { ctx.beginPath(); ctx.moveTo(x + 25, rowY + 10); ctx.lineTo(x + width - 25, rowY + 10); ctx.strokeStyle = '#2a3a2a'; ctx.stroke(); }
+        });
+    }
+    drawTable('ТОП КД', topKD, 20, 20, 380, 'КД', 'kd'); drawTable('ТОП КДА', topKDA, 410, 20, 380, 'КДА', 'kda'); drawTable('ТОП ОЧКИ', topP, 800, 20, 380, 'Очки', 'points');
+    const sumKd = active.reduce((a, p) => a + (p.kd || 0), 0), sumKda = active.reduce((a, p) => a + (p.kda || 0), 0), sumPts = active.reduce((a, p) => a + (p.points || 0), 0);
+    const avgKdTotal = (sumKd / active.length || 0).toFixed(2), avgKdaTotal = (sumKda / active.length || 0).toFixed(2), avgPtsTotal = Math.round(sumPts / active.length) || 0;
+    let avgKdStage = '0.00', avgKdaStage = '0.00', avgPtsStage = '0';
+    if (AppState.matchStats.length > 0) {
+        let tK = 0, tD = 0, tA = 0, tP = 0; AppState.matchStats.forEach(s => { tK += s.kills || 0; tD += s.deaths || 0; tA += s.assists || 0; tP += s.points || 0; });
+        avgKdStage = (tD === 0 ? tK : tK / tD).toFixed(2); avgKdaStage = (tD === 0 ? (tK + tA) : (tK + tA) / tD).toFixed(2); avgPtsStage = Math.round(tP / Math.max(...AppState.matchStats.map(s => s.stage_number))).toString();
+    }
+    const statsY = 420; ctx.fillStyle = '#ff9800'; ctx.font = 'bold 20px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText('СРЕДНИЕ ПОКАЗАТЕЛИ', 600, statsY);
+    const blockW = 380, blockH = 70, row1Y = statsY + 20, row2Y = row1Y + blockH + 15;
+    const drawBlocks = (blocks, yPos) => {
+        blocks.forEach(b => { ctx.fillStyle = '#1a201a'; ctx.beginPath(); ctx.roundRect(b.x, yPos, blockW, blockH, 8); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke(); ctx.fillStyle = '#7a857a'; ctx.font = '14px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(b.title, b.x + blockW / 2, yPos + 25); ctx.fillStyle = '#4caf50'; ctx.font = 'bold 22px Segoe UI'; ctx.fillText(b.value, b.x + blockW / 2, yPos + 55); });
+    };
+    drawBlocks([{ title: 'КД (за этап)', value: avgKdStage, x: 20 }, { title: 'КДА (за этап)', value: avgKdaStage, x: 410 }, { title: 'Очки (за этап)', value: avgPtsStage, x: 800 }], row1Y);
+    drawBlocks([{ title: 'Общий КД', value: avgKdTotal, x: 20 }, { title: 'Общий КДА', value: avgKdaTotal, x: 410 }, { title: 'Общие очки', value: avgPtsTotal, x: 800 }], row2Y);
+    const base64Image = canvas.toDataURL('image/png');
+    try {
+        const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/send-to-discord', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: ANALYTICS_CHANNEL_ID, content: '', imageBase64: base64Image, deletePrevious: true }) });
+        if (res.ok) showToast('Аналитика отправлена!', 'success'); else showToast('Ошибка', 'error');
+    } catch (err) { console.error(err); showToast('Ошибка отправки', 'error'); }
+}
+
+async function sendRosterScreenshot() {
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d'); canvas.width = 1200; canvas.height = 900;
+    ctx.fillStyle = '#0d0f0d'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#ff9800'; ctx.font = 'bold 28px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText('СОСТАВ КЛАНА', 600, 50);
+    const cardW = 360, cardH = 350, gapX = 30, gapY = 40, startX = (1200 - (cardW * 3 + gapX * 2)) / 2, startY = 100;
+    SQUADS_CONFIG.forEach((squad, index) => {
+        const col = index % 3, row = Math.floor(index / 3), x = startX + col * (cardW + gapX), y = startY + row * (cardH + gapY);
+        ctx.fillStyle = '#1a201a'; ctx.beginPath(); ctx.roundRect(x, y, cardW, cardH, 8); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+        ctx.fillStyle = '#4caf50'; ctx.font = 'bold 18px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(squad.name, x + cardW / 2, y + 35);
+        ctx.beginPath(); ctx.moveTo(x + 20, y + 50); ctx.lineTo(x + cardW - 20, y + 50); ctx.strokeStyle = '#4caf50'; ctx.stroke();
+        squad.roles.forEach((role, rIndex) => {
+            const slotY = y + 70 + rIndex * 45, player = AppState.activePlayers.find(p => p.squad === squad.name && p.role === role), playerName = player ? player.nickname : 'Свободно', playerColor = player ? '#d1d5d1' : '#555', displayRole = role.replace(' 1', '').replace(' 2', '').replace(' 3', '');
+            ctx.fillStyle = '#111411'; ctx.beginPath(); ctx.roundRect(x + 20, slotY, cardW - 40, 32, 4); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+            ctx.fillStyle = '#7a857a'; ctx.font = '14px Segoe UI'; ctx.textAlign = 'left'; ctx.fillText(displayRole, x + 30, slotY + 21, 120);
+            ctx.fillStyle = playerColor; ctx.textAlign = 'right'; ctx.fillText(playerName, x + cardW - 30, slotY + 21, 180);
+        });
+    });
+    const base64Image = canvas.toDataURL('image/png');
+    try {
+        const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/send-to-discord', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: ROSTER_CHANNEL_ID, content: '', imageBase64: base64Image, deletePrevious: true }) });
+        if (res.ok) showToast('Состав отправлен!', 'success'); else showToast('Ошибка', 'error');
+    } catch (err) { console.error(err); showToast('Ошибка отправки', 'error'); }
+}
+async function clearAllData() {
+    if (!canEdit()) { showToast('Только в активном сезоне', 'error'); return; }
+    if (!confirm(`⚠️ Удалить ВСЕ данные Сезона ${AppState.activeSeason.season_number}? Игроки и штрафы останутся.`)) return;
+    const sid = AppState.activeSeason.id, statusDiv = document.getElementById('photo-status');
+    if (statusDiv) statusDiv.innerHTML = 'УДАЛЕНИЕ...';
+    try {
+        await supabaseClient.from('match_stats').delete().eq('season_id', sid); await supabaseClient.from('attendance').delete().eq('season_id', sid);
+        await supabaseClient.from('clan_matches').delete().eq('season_id', sid); await supabaseClient.from('upcoming_matches').delete().eq('season_id', sid);
+        await supabaseClient.from('tournaments').delete().eq('season_id', sid); await supabaseClient.from('players').update({ kd: 0, kda: 0, points: 0 }).neq('id', 0);
+        await supabaseClient.from('tournaments').insert([{ tournament_number: 1, season_id: sid }]); if (statusDiv) statusDiv.innerHTML = 'ОЧИЩЕНО!';
+        await refreshAll(); showToast('Данные сезона очищены', 'success');
+    } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
+}
+async function sendAdminSummaryToDiscord() {
+    if (!isAdmin) return showToast('Только для админа', 'error');
+    let msg = `**🤖 СВОДКА ТРЕНЕРА STALZONE**\n\n`, active = AppState.activePlayers;
+    msg += `📊 Активных бойцов: ${active.length}\n🏆 Турниров сыграно: ${AppState.tournaments.length} из ${TOURNAMENTS_PER_SEASON}\n\n`;
+    const missed = AppState.attendance.filter(a => a.status === 'Не пришел'), missedGrouped = {};
+    missed.forEach(m => { if (!missedGrouped[m.player_id]) missedGrouped[m.player_id] = 0; missedGrouped[m.player_id]++; });
+    const highMissed = Object.keys(missedGrouped).filter(id => missedGrouped[id] >= 3).map(id => { const p = AppState.players.find(x => x.id == id); return p ? `${p.nickname} (${missedGrouped[id]} прог.)` : null; }).filter(Boolean);
+    if (highMissed.length > 0) msg += `⚠️ **Проблемы с дисциплиной (3+ прогула):**\n- ${highMissed.join('\n- ')}\n\n`; else msg += `✅ С дисциплиной всё отлично.\n\n`;
+    if (AppState.tournaments.length > 0) {
+        const lastTour = Math.max(...AppState.tournaments.map(t => t.tournament_number)), startStage = (lastTour - 1) * 3 + 1, endStage = lastTour * 3;
+        const tStats = AppState.matchStats.filter(s => s.stage_number >= startStage && s.stage_number <= endStage), playerPoints = {};
+        tStats.forEach(s => { if (!playerPoints[s.player_id]) playerPoints[s.player_id] = 0; playerPoints[s.player_id] += (s.points || 0); });
+        const top = Object.entries(playerPoints).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, pts]) => { const p = AppState.players.find(x => x.id == id); return p ? `${p.nickname} — ${pts} очков` : null; }).filter(Boolean);
+        if (top.length > 0) msg += `🔥 **Лучшие за Турнир ${lastTour}:**\n- ${top.join('\n- ')}\n\n`;
+    }
+    msg += `_Сформировано автоматически на портале STALZONE_`;
+    const DISCORD_USER_ID = prompt('Введите ваш Discord ID для получения сводки в ЛС:', '');
+    if (!DISCORD_USER_ID) return;
+    try {
+        showToast('Отправка...', 'info');
+        const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/send-to-discord', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: DISCORD_USER_ID, content: msg, imageBase64: null, deletePrevious: false }) });
+        if (res.ok) showToast('Сводка отправлена в Discord!', 'success'); else showToast('Ошибка при отправке (проверьте ID)', 'error');
+    } catch (err) { console.error(err); showToast('Ошибка сети', 'error'); }
+}
+let realtimeChannel = null;
+function initRealtime() {
+    if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+    realtimeChannel = supabaseClient.channel('portal-realtime-sync').on('postgres_changes', { event: '*', schema: 'public' }, (payload) => { refreshAll(); }).subscribe((status) => { if (status === 'SUBSCRIBED') console.log('✅ Realtime подключён'); });
+}
+refreshAll().then(() => { initRealtime(); });
