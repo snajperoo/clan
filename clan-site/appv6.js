@@ -96,7 +96,7 @@ function updateGearsThreshold(val) {
     showToast(`Порог гильз обновлен: ${v}%`, 'success');
 }
 
-// ==================== КОНТЕКСТНОЕ МЕНЮ (ФИЧА №3) ====================
+// ==================== КОНТЕКСТНОЕ МЕНЮ ====================
 function showContextMenu(e, playerId) {
     e.preventDefault();
     if (!isAdmin) return;
@@ -254,17 +254,29 @@ function calculateAllMatchDetails() {
         let clanGears = 0;
         const c = m.clan_score || 0;
         const e = m.enemy_points || 0;
+        const totalMatchScore = c + e;
         
+        // Рейтинг меняется всегда
         if (c > e) {
             ratingChange = RATING_CHANGE;
-            clanGears = tierBefore.win;
-            currentRating += ratingChange;
         } else if (c < e) {
             ratingChange = -RATING_CHANGE;
-            clanGears = tierBefore.loss;
-            currentRating += ratingChange;
+        }
+
+        // ГИЛЬЗЫ КЛАНА: проверяем, набрал ли КЛАН 20% от ОБЩЕГО счета матча (наш + врага)
+        if (totalMatchScore > 0) {
+            const clanRatio = c / totalMatchScore;
+            // Если набрали 20% или больше от общего счета
+            if (clanRatio >= (gearsThresholdPercent / 100)) {
+                if (c > e) {
+                    clanGears = tierBefore.win;
+                } else if (c < e) {
+                    clanGears = tierBefore.loss;
+                }
+            }
         }
         
+        currentRating += ratingChange;
         AppState.matchDetails[m.id] = { tierBefore, ratingChange, clanGears, totalRating: currentRating };
     });
 }
@@ -280,21 +292,18 @@ function calculatePlayerGears(playerId) {
         const details = AppState.matchDetails[match.id];
         if (!details) return;
         
+        // Если клан не получил гильзы за этот матч (не взял 20% от общего), игрок тоже получает 0
+        if (details.clanGears === 0) return;
+
         const clanScore = match.clan_score || 0;
         const playerPoints = stat.points || 0;
         
         if (clanScore === 0) return;
         
-        // ИЗМЕНЕНО: Теперь 20% включительно дают гильзы (строго меньше 20% - 0 гильз)
+        // Игрок должен набрать 20% и более от СЧЕТА КЛАНА
         if ((playerPoints / clanScore) < (gearsThresholdPercent / 100)) return; 
         
-        let gears = 0;
-        if (clanScore > (match.enemy_points || 0)) {
-            gears = details.tierBefore.win;
-        } else if (clanScore < (match.enemy_points || 0)) {
-            gears = details.tierBefore.loss;
-        }
-        totalGears += gears;
+        totalGears += details.clanGears; 
     });
     return totalGears;
 }
@@ -1773,7 +1782,6 @@ async function loadAnalytics() {
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
     document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
     
-    // Топ по гильзам с учетом 20% (или другого порога)
     const playersWithGears = active.map(p => ({ ...p, gears: calculatePlayerGears(p.id) })).sort((a, b) => b.gears - a.gears).slice(0, 10);
     document.querySelector('#top-gears-table tbody').innerHTML = playersWithGears.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td style="color:#9cdcfe; font-weight:bold;">${p.gears.toLocaleString('ru-RU')}</td></tr>`).join('');
 
@@ -1802,7 +1810,6 @@ async function loadAnalytics() {
         }
     }
 
-    // Устанавливаем текущее значение порога в инпут
     const thresholdInput = document.getElementById('gears-threshold-input');
     if (thresholdInput) thresholdInput.value = gearsThresholdPercent;
 }
