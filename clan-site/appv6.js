@@ -528,6 +528,40 @@ function renderTournamentMVPs() {
     container.innerHTML = html + '</div>';
 }
 
+// ==================== ФИЛЬТР ИСТОРИИ [NEW] ====================
+const historyFilters = { enemy: '', dateFrom: '', dateTo: '' };
+let _historyFilterDebounce = null;
+
+function applyHistoryFiltersDebounced() {
+    clearTimeout(_historyFilterDebounce);
+    _historyFilterDebounce = setTimeout(applyHistoryFilters, 200);
+}
+
+function applyHistoryFilters() {
+    historyFilters.enemy = (document.getElementById('history-filter-enemy')?.value || '').trim().toLowerCase();
+    historyFilters.dateFrom = document.getElementById('history-filter-date-from')?.value || '';
+    historyFilters.dateTo = document.getElementById('history-filter-date-to')?.value || '';
+    loadMatchHistory();
+}
+
+function resetHistoryFilters() {
+    ['history-filter-enemy', 'history-filter-date-from', 'history-filter-date-to'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
+    applyHistoryFilters();
+}
+
+function isHistoryFilterActive() {
+    return !!(historyFilters.enemy || historyFilters.dateFrom || historyFilters.dateTo);
+}
+
+function matchPassesHistoryFilter(m) {
+    if (historyFilters.enemy && !(m.enemy_name || '').toLowerCase().includes(historyFilters.enemy)) return false;
+    if (historyFilters.dateFrom && (!m.match_date || m.match_date < historyFilters.dateFrom)) return false;
+    if (historyFilters.dateTo && (!m.match_date || m.match_date > historyFilters.dateTo)) return false;
+    return true;
+}
+
 // ==================== ИСТОРИЯ ====================
 async function loadMatchHistory() {
     const timeline = document.getElementById('history-timeline'); if (!timeline) return; timeline.innerHTML = '<div style="text-align:center; width:100%;">Загрузка...</div>';
@@ -542,9 +576,15 @@ async function loadMatchHistory() {
     document.getElementById('hr-gears').innerText = totalClanGears.toLocaleString('ru-RU');
     let wins = 0, losses = 0, draws = 0; timeline.innerHTML = '';
     if (totalStages === 0) { timeline.innerHTML = '<div style="text-align:center; width:100%; padding:30px; color:var(--text-muted);">Нет турниров.</div>'; renderHistoryChart(0, 0, 0); return; }
+    const filterActive = isHistoryFilterActive();
+    const filterStatus = document.getElementById('history-filter-status');
     const stageOrder = []; for (let s = totalStages; s >= 1; s--) stageOrder.push(s);
-    stageOrder.forEach((stageNum, index) => {
-        const match = matchesByStage[stageNum], isLeft = index % 2 === 0, tourneyNum = Math.ceil(stageNum / 3);
+    let renderIndex = 0, renderedCount = 0;
+    stageOrder.forEach((stageNum) => {
+        const match = matchesByStage[stageNum];
+        if (filterActive && (!match || !matchPassesHistoryFilter(match))) return;
+        const isLeft = renderIndex % 2 === 0, tourneyNum = Math.ceil(stageNum / 3);
+        renderIndex++; renderedCount++;
         if (match) {
             const dateStr = match.match_date ? new Date(match.match_date + 'T00:00:00').toLocaleDateString('ru-RU') : 'Дата не указана';
             const c = match.clan_score || 0, e = match.enemy_points || 0, opp = match.enemy_name || 'Неизвестный', map = match.map_name || 'Не указана';
@@ -573,6 +613,17 @@ async function loadMatchHistory() {
             timeline.innerHTML += `<div class="timeline-item ${isLeft ? 'left' : 'right'}"><div class="timeline-content" style="opacity:0.55; border-style:dashed;"><div style="font-size:0.8em; color:var(--text-muted); margin-bottom:5px;">ТУРНИР ${tourneyNum} · ЭТАП ${stageNum}</div><div class="timeline-opponent" style="color:var(--text-muted); font-style:italic;">Не сыгран</div>${fillBtn}</div></div>`;
         }
     });
+    if (filterActive) {
+        if (renderedCount === 0) {
+            timeline.innerHTML = '<div style="text-align:center; width:100%; padding:40px; color:var(--text-muted);">По заданным фильтрам матчей не найдено.</div>';
+        }
+        if (filterStatus) {
+            filterStatus.style.display = 'block';
+            filterStatus.innerText = `🔍 Найдено матчей: ${renderedCount}. Рейтинг и гильзы — за весь сезон.`;
+        }
+    } else if (filterStatus) {
+        filterStatus.style.display = 'none';
+    }
     renderHistoryChart(wins, losses, draws);
 }
 async function fillEmptyMatch(stageNum) {
@@ -688,7 +739,6 @@ async function confirmPhotoUpload() {
 async function loadAnalytics() {
     const active = AppState.activePlayers;
     
-    // ТОПЫ
     const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10);
     document.querySelector('#top-kd-table tbody').innerHTML = topKD.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kd}</td></tr>`).join('');
     const topKDA = [...active].sort((a, b) => b.kda - a.kda).slice(0, 10);
@@ -696,7 +746,6 @@ async function loadAnalytics() {
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
     document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
     
-    // СТАТИСТИКА ПО КАРТАМ
     const mapStats = {}; TOURNAMENT_MAPS.forEach(m => mapStats[m] = { wins: 0, losses: 0, draws: 0, total: 0 });
     AppState.matches.forEach(m => {
         if (m.map_name && mapStats[m.map_name]) {
@@ -708,7 +757,6 @@ async function loadAnalytics() {
     const mapTbody = document.querySelector('#map-stats-table tbody');
     if (mapTbody) { mapTbody.innerHTML = Object.entries(mapStats).map(([map, s]) => { const wr = s.total === 0 ? 0 : Math.round((s.wins / s.total) * 100); const color = wr >= 50 ? 'var(--success-color)' : 'var(--danger-color)'; return `<tr><td>${map}</td><td>${s.total}</td><td>${s.wins}</td><td style="color:${color}; font-weight:bold;">${wr}%</td></tr>`; }).join(''); }
 
-    // ДИНАМИКА (Сравнение с прошлым сезоном)
     const prevSeason = AppState.seasons.find(s => s.season_number === AppState.viewingSeason.season_number - 1);
     const currentMatches = AppState.matches;
     const currentWins = currentMatches.filter(m => m.clan_score > m.enemy_points).length;
