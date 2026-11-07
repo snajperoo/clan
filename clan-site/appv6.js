@@ -479,6 +479,34 @@ async function handleDrop(event, slot) {
 async function removeFromSquad(id) {
     if (!canEdit() || !confirm('Убрать из отряда?')) return; await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id); await refreshAll(); initDragAndDrop();
 }
+async function clearAllSquads() {
+    if (!canEdit()) return showToast('Нет прав на редактирование', 'error');
+    if (!confirm('⚠️ Вы уверены, что хотите убрать ВСЕХ игроков из отрядов в резерв?')) return;
+
+    const btn = document.getElementById('btn-clear-roster');
+    const oldText = btn.innerText;
+    btn.innerText = 'Очистка...';
+    btn.disabled = true;
+
+    try {
+        const { error } = await supabaseClient
+            .from('players')
+            .update({ squad: null, role: null })
+            .not('squad', 'is', null); 
+
+        if (error) throw error;
+
+        showToast('Все игроки убраны в резерв', 'success');
+        await refreshAll();
+        initDragAndDrop();
+    } catch (err) {
+        console.error(err);
+        showToast('Ошибка при очистке: ' + err.message, 'error');
+    } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }
+}
 
 // ==================== ПОСЕЩАЕМОСТЬ ====================
 async function loadAttendance() {
