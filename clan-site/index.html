@@ -226,7 +226,6 @@
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-attendance')">Посещаемость</button>
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-missed')">Пропуски</button>
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-stats')">Статистика</button>
-            <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-pending')">❓ Неопознанные</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-analytics')">Аналитика</button>
         </div>
 
@@ -483,24 +482,14 @@
         <!-- ==================== КАЛЕНДАРЬ ==================== -->
         <div id="tab-calendar" class="tab-content">
             <div class="stage-header">
-                <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">📅 Календарь матчей</h2>
+                <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">📅 Календарь турниров</h2>
             </div>
 
             <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--border-color); display:none;">
-                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Добавить матч</h3>
+                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать турнир</h3>
                 <div class="form-grid-3">
                     <div class="form-group"><label>Дата</label><input type="date" id="cal-date"></div>
                     <div class="form-group"><label>Время</label><input type="time" id="cal-time"></div>
-                    <div class="form-group"><label>Тип</label>
-                        <select id="cal-type" style="width:100%;">
-                            <option value="tournament">🏆 Турнир</option>
-                            <option value="clan_war">⚔️ Клан-война</option>
-                            <option value="friendly">🤝 Товарищеский</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-grid-2">
-                    <div class="form-group"><label>Противник</label><input type="text" id="cal-enemy" placeholder="Название клана"></div>
                     <div class="form-group"><label>Заметки</label><input type="text" id="cal-notes" placeholder="Сбор в 19:30"></div>
                 </div>
                 <div class="form-grid-2">
@@ -581,22 +570,6 @@
 
             <div style="overflow-x: auto;">
                 <table class="stats-table" id="stats-main-table"><thead id="stats-thead"></thead><tbody id="stats-tbody"></tbody></table>
-            </div>
-        </div>
-
-        <!-- ==================== НЕОПОЗНАННЫЕ ==================== -->
-        <div id="tab-pending" class="tab-content admin-tab">
-            <div class="stage-header">
-                <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">❓ Неопознанные ники</h2>
-            </div>
-            <p style="color:var(--text-muted); text-transform:uppercase; font-size:0.9em;">Ники, которые не удалось сопоставить при распознавании фото. Можно создать нового игрока, связать с существующим или проигнорировать.</p>
-            <div style="overflow-x:auto;">
-                <table class="stats-table">
-                    <thead>
-                        <tr><th>Ник</th><th>Этап</th><th>K/D/A</th><th>Очки</th><th>Действия</th></tr>
-                    </thead>
-                    <tbody id="pending-tbody"></tbody>
-                </table>
             </div>
         </div>
 
