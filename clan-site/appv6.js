@@ -50,6 +50,40 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
+// Конфигурация оружия (полностью обновлена по скриншотам)
+const EQUIPMENT_CONFIG = {
+    rifles: [
+        'A-545', 'A-762 «Арес»', 'AAC Honey Badger', 'ACM «Сервал»', 'AK-12 (A)', 'AK-15', 'AK-308', 'AK-308 (A)', 
+        'AM-17', 'АМБ-17', 'АШ-12', 'AUG A3 (A)', 'Beretta ARX-160', 'DSA-58', 'DSA-58 (A)', 'FAL (A)', 
+        'FAMAS G2', 'FAMAS G2 SG', 'FN F2000 Tactical', 'FN FAL', 'FN SCAR-H', 'HK416 (A)', 'HK417', 
+        'HK417 (A)', 'HK XM8', 'HK XM8S', 'IWI Tavor X95', 'K2C1', 'KS-1', 'LR-300', 'MK47 Mutant', 
+        'ОЦ-14М «Разряд»', 'PSA 20 STR «Пульс»', 'QBZ-191 «Буревестник»', 'SA-58 CTC', 'SCAR-H (A)', 
+        'SCAR-L «Наследие»', 'X95 (A)', 'XM8 (A)', 'XM8S (A)', 'Руна', '«Руна» (A)'
+    ].sort(),
+    smgs: [
+        'HK MP7A2', 'Scorpion EVO III', 'SIG MPX', 'TDI KRISS Vector', 'ППК-20', 'СР-3М'
+    ].sort(),
+    snipers: [
+        'Cheytac M300', 'Cheytac M300 (A)', 'CheyTac M200 Intervention', 'CR-380', 'FN SCAR SSR', 'L96A1', 
+        'McMillan CS5', 'MK 14 EBR', 'ОТЛ-03 «Карбач»', 'ПТРД-М', 'ПТРД-М (A)', 'PzB 38', 'QBU-191', 
+        'СВД-М', 'СВЧ', 'СВЧ (A)', 'WA2000', 'Винтовка Гаусса', 'ВСС-М «Винторез»', 'ВССК «Выхлоп»', 
+        'ВСК-94', 'ВСК-94 (A)', '«Воздухан»', '«Волна»', '«Волна» (A)'
+    ].sort(),
+    pistols: [
+        'CR-72', 'Desert Eagle Mark XIX', 'FN Five-seveN', 'Glock 18X', 'Magpul FMG-9', 'ОЦ-33 «Пернач»', 
+        'РШ-12', 'SIG Sauer P320', '«Большой Билл»', 'Инвертор', '«Инвертор» (A)'
+    ].sort(),
+    machine_guns: [
+        '6П62 «Малыш»', 'DSA RPD', 'K15', 'M60E4', 'MG 3', 'ПКП «Печенег»', 'РПЛ-20'
+    ].sort(),
+    shotguns: [
+        'AEK-965', 'Derya MK-12 (A)', 'Derya MK-12 AS-103S', 'KS-12 Komrad', 'MP-155 Ultima', 
+        'Pancor Jackhammer', 'ТОЗ-84'
+    ].sort(),
+    armor_combat: ['Корунд', 'Монолит', 'Тяжелый', 'Заря', 'СЕВА', 'Экзоскелет'],
+    armor_combined: ['Комбинезон сталкера', 'Бандитская куртка', 'СЕВА', 'Экзоскелет', 'Комбинированная']
+};
+
 function getTierByRating(rating) { return TIERS.find(t => rating >= t.min) || TIERS[TIERS.length - 1]; }
 function getLocalDateString(date = new Date()) { const offset = date.getTimezoneOffset(); const localDate = new Date(date.getTime() - (offset * 60 * 1000)); return localDate.toISOString().split('T')[0]; }
 function showToast(message, type = 'success') {
@@ -279,7 +313,33 @@ function populateProfileDropdowns() {
     if (squadSelect.tomselect) squadSelect.tomselect.destroy(); if (roleSelect.tomselect) roleSelect.tomselect.destroy();
     squadSelect.innerHTML = '<option value="">-- Без отряда --</option>'; SQUADS_CONFIG.forEach(sq => squadSelect.innerHTML += `<option value="${sq.name}">${sq.name}</option>`);
     roleSelect.innerHTML = '<option value="">-- Без роли --</option>'; SQUADS_CONFIG[0].roles.forEach(r => roleSelect.innerHTML += `<option value="${r}">${r}</option>`);
+
+    const eqSelects = {
+        'select-rifle': EQUIPMENT_CONFIG.rifles,
+        'select-smg': EQUIPMENT_CONFIG.smgs,
+        'select-sniper': EQUIPMENT_CONFIG.snipers,
+        'select-pistol': EQUIPMENT_CONFIG.pistols,
+        'select-machine-gun': EQUIPMENT_CONFIG.machine_guns,
+        'select-shotgun': EQUIPMENT_CONFIG.shotguns,
+        'select-armor-combat': EQUIPMENT_CONFIG.armor_combat,
+        'select-armor-combined': EQUIPMENT_CONFIG.armor_combined
+    };
+
+    for (const [id, options] of Object.entries(eqSelects)) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (el.tomselect) el.tomselect.destroy();
+        el.innerHTML = '<option value="">-- Не выбрано --</option>';
+        options.forEach(opt => {
+            const o = document.createElement('option');
+            o.value = opt;
+            o.textContent = opt;
+            el.appendChild(o);
+        });
+        new TomSelect(el, { create: true, sortField: { field: "text", direction: "asc" }, maxItems: 1 });
+    }
 }
+
 function fillPlayerSelects() {
     const select = document.getElementById('fine-player'); if (!select) return;
     select.innerHTML = '<option value="">-- Выберите игрока --</option>'; AppState.activePlayers.forEach(p => select.appendChild(new Option(p.nickname, p.id))); initSearchableSelect('fine-player', 'up');
@@ -307,10 +367,12 @@ async function selectPlayer(p) {
     document.getElementById('profile-sledgehammer').checked = p.has_sledgehammer || false; document.getElementById('profile-speed-combat').value = p.speed_combat || '';
     document.getElementById('profile-penetration-combat').value = p.penetration_combat || ''; document.getElementById('profile-speed-combined').value = p.speed_combined || '';
     document.getElementById('profile-penetration-combined').value = p.penetration_combined || '';
+    
     ['select-rifle','select-smg','select-sniper','select-pistol','select-machine-gun','select-shotgun','select-armor-combat','select-armor-combined','profile-status','profile-squad','profile-role'].forEach(id => {
         const el = document.getElementById(id); const val = id === 'profile-squad' ? (p.squad || '') : id === 'profile-role' ? (p.role || '') : id === 'profile-status' ? (p.status || 'в клане') : id === 'select-rifle' ? (p.main_rifle || '') : id === 'select-smg' ? (p.main_smg || '') : id === 'select-sniper' ? (p.sniper || '') : id === 'select-pistol' ? (p.secondary_pistol || '') : id === 'select-machine-gun' ? (p.machine_gun || '') : id === 'select-shotgun' ? (p.shotgun || '') : id === 'select-armor-combat' ? (p.armor_combat || '') : id === 'select-armor-combined' ? (p.armor_combined || '') : '';
         if (el.tomselect) el.tomselect.setValue(val, true); else el.value = val;
     });
+    
     document.getElementById('btn-delete').style.display = 'block'; renderPlayerList(); const st = computeSeasonStats(p.id);
     document.getElementById('profile-kd').value = st.kd; document.getElementById('profile-kda').value = st.kda; document.getElementById('profile-points').value = st.points;
     const missed = AppState.attendance.filter(a => a.player_id === p.id && a.status === 'Не пришел');
