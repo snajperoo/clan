@@ -40,6 +40,13 @@
         .ts-dropdown .option:hover { background-color: rgba(255,255,255,0.05); }
         .ts-control > input { color: var(--text-color) !important; }
 
+        /* Стили для контекстного меню */
+        .custom-context-menu { position: fixed; display: none; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius); box-shadow: 0 5px 15px rgba(0,0,0,0.8); z-index: 10000; min-width: 180px; overflow: hidden; backdrop-filter: blur(5px); }
+        .context-item { padding: 12px 15px; cursor: pointer; font-family: 'Courier New', Courier, monospace; color: var(--text-color); font-size: 0.9em; transition: 0.1s; display: flex; align-items: center; gap: 10px; }
+        .context-item:hover { background: var(--accent-color); color: #000; }
+        .context-item.danger { color: var(--danger-color); }
+        .context-item.danger:hover { background: var(--danger-color); color: #fff; }
+
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-color); margin: 0; padding: 0; transition: 0.3s; min-height: 100vh; }
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
@@ -198,6 +205,7 @@
 </head>
 <body>
     <div id="toast-container"></div>
+    <div id="custom-context-menu" class="custom-context-menu"></div>
 
     <div class="container">
         <div class="header">
@@ -263,6 +271,7 @@
                         <div><span style="color:var(--text-muted);">КД:</span> <strong id="my-kd">0</strong></div>
                         <div><span style="color:var(--text-muted);">КДА:</span> <strong id="my-kda">0</strong></div>
                         <div><span style="color:var(--text-muted);">Очки:</span> <strong id="my-points">0</strong></div>
+                        <div><span style="color:var(--text-muted);">Гильзы:</span> <strong id="my-gears" style="color:#9cdcfe;">0</strong></div>
                         <div><span style="color:var(--text-muted);">Отряд:</span> <strong id="my-squad">-</strong></div>
                         <div><span style="color:var(--text-muted);">Статус:</span> <strong id="my-status">-</strong></div>
                     </div>
@@ -642,6 +651,11 @@
                 <div class="analytics-card">
                     <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ОЧКИ</h3>
                     <table id="top-points-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Очки</th></tr></thead><tbody></tbody></table>
+                </div>
+                <!-- НОВАЯ ТАБЛИЦА ГИЛЬЗ -->
+                <div class="analytics-card">
+                    <h3 style="color:#9cdcfe; text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ГИЛЬЗЫ</h3>
+                    <table id="top-gears-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Гильзы</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
             <div class="stats-summary">
