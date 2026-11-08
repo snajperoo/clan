@@ -3,7 +3,8 @@ const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz';
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [];
+// ДОБАВЛЕНА ПЕРЕМЕННАЯ allNotes
+let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allNotes = [];
 let currentEditId = null, maxAttendanceStage = 3, maxTournament = 4, isAdmin = false, currentPhotoFile = null;
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
 
@@ -105,6 +106,10 @@ async function loadAllData() {
     const { data: players } = await supabaseClient.from('players').select('*').order('kd', { ascending: false });
     if (players) { allPlayers = players; activePlayers = players.filter(p => !p.status || p.status === 'в клане'); renderTops(); renderPlayerList(); fillPlayerSelects(); }
     
+    // Загрузка заметок для отображения плашек в списке
+    const { data: notesData } = await supabaseClient.from('player_notes').select('*');
+    if (notesData) allNotes = notesData;
+
     const { data: rifles } = await supabaseClient.from('assault_rifles').select('name').order('name');
     const selectRifle = document.getElementById('select-rifle');
     if (selectRifle) {
@@ -243,10 +248,21 @@ function renderPlayerList(filterText = '') {
         return (STATUS_PRIORITY[sA] || 2) !== (STATUS_PRIORITY[sB] || 2) ? (STATUS_PRIORITY[sA] || 2) - (STATUS_PRIORITY[sB] || 2) : a.nickname.localeCompare(b.nickname); 
     });
     if (filteredPlayers.length === 0) { container.innerHTML = '<div style="text-align:center; color:#888; padding: 20px;">Никого не найдено</div>'; return; }
+    
     filteredPlayers.forEach(p => {
         const div = document.createElement('div'); div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
         let sColor = 'var(--success-color)'; if (p.status === 'в обработке') sColor = 'var(--accent-color)'; if (p.status === 'кикнут') sColor = 'var(--danger-color)';
-        div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold;">${p.nickname}</span><span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span></div><span style="color:#888; font-size:0.8em;">${p.discord_id || 'ID: ' + p.id}</span>`;
+        
+        // СЧИТАЕМ ЗАМЕТКИ ДЛЯ ЭТОГО ИГРОКА
+        const pNotes = allNotes.filter(n => n.player_id === p.id);
+        const coachCount = pNotes.filter(n => n.note_type === 'coach').length;
+        const tkCount = pNotes.filter(n => n.note_type === 'timekeeper').length;
+        
+        let badges = '';
+        if (coachCount > 0) badges += `<span style="background:#4caf50; color:#000; padding:1px 5px; border-radius:10px; font-size:0.7em; margin-left:5px;" title="Заметки тренера">📝 ${coachCount}</span>`;
+        if (tkCount > 0) badges += `<span style="background:#9cdcfe; color:#000; padding:1px 5px; border-radius:10px; font-size:0.7em; margin-left:5px;" title="Заметки табельщика">📋 ${tkCount}</span>`;
+
+        div.innerHTML = `<div style="display:flex; flex-direction:column;"><div style="display:flex; align-items:center;"><span style="font-weight:bold;">${p.nickname}</span>${badges}</div><span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span></div><span style="color:#888; font-size:0.8em;">${p.discord_id || 'ID: ' + p.id}</span>`;
         div.onclick = () => selectPlayer(p); container.appendChild(div);
     });
 }
@@ -289,13 +305,12 @@ async function selectPlayer(p) {
     const missedBox = document.getElementById('player-missed-stats');
     if (missedBox) { missedBox.style.display = 'block'; document.getElementById('pm-absent').innerText = missed ? missed.length : 0; }
 
-    // ============ ПОКАЗ И ЗАГРУЗКА ЗАМЕТОК ============
+    // ПОКАЗ И ЗАГРУЗКА ЗАМЕТОК
     const coachWrapper = document.getElementById('player-notes-wrapper');
     const tkWrapper = document.getElementById('player-timekeeper-notes-wrapper');
     if (coachWrapper) coachWrapper.style.display = 'block';
     if (tkWrapper) tkWrapper.style.display = 'block';
     await loadPlayerNotes(p.id);
-    // ==================================================
 }
 
 function clearForm() {
@@ -1076,6 +1091,11 @@ async function addPlayerNote(type) {
     if (error) return showToast('Ошибка: ' + error.message, 'error');
     input.value = '';
     showToast('Заметка добавлена', 'success');
+    
+    // Обновляем кэш заметок и перерисовываем левый список, чтобы появились плашки
+    const { data: notesData } = await supabaseClient.from('player_notes').select('*');
+    if (notesData) { allNotes = notesData; renderPlayerList(); }
+    
     await loadPlayerNotes(currentEditId);
 }
 
@@ -1084,6 +1104,11 @@ async function deletePlayerNote(noteId, playerId) {
     const { error } = await supabaseClient.from('player_notes').delete().eq('id', noteId);
     if (error) return showToast('Ошибка: ' + error.message, 'error');
     showToast('Заметка удалена', 'success');
+    
+    // Обновляем кэш заметок и перерисовываем левый список
+    const { data: notesData } = await supabaseClient.from('player_notes').select('*');
+    if (notesData) { allNotes = notesData; renderPlayerList(); }
+
     await loadPlayerNotes(playerId);
 }
 // =======================================================================
