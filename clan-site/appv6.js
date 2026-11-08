@@ -21,6 +21,7 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
+// Настройки рейтинга и гильз
 const TIER_SETTINGS = [
     { name: 'E', minRating: 0, winGears: 1250, lossGears: 250 },
     { name: 'D', minRating: 1050, winGears: 1750, lossGears: 500 },
@@ -767,7 +768,6 @@ async function loadMatchHistory() {
         else if (cScore < eScore) { scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; }
         else { winText = 'НИЧЬЯ'; }
 
-        // ВЫПАДАЮЩИЙ СПИСОК С 3 КАРТАМИ
         const adminEdit = isAdmin ? `
             <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 10px;">
                 <input type="date" value="${match.match_date || ''}" onchange="updateMatchData(${match.id}, 'date', this.value)" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
@@ -833,7 +833,6 @@ async function addMatchHistory() {
     const date = prompt("Введите дату матча (ГГГГ-ММ-ДД):", new Date().toISOString().split('T')[0]);
     if (!date) return;
     
-    // При создании ставим карту "Низина" по умолчанию, чтобы не заставлять вводить её
     const { error } = await supabaseClient.from('clan_matches').insert([{ match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг', map_name: 'Низина' }]);
     if (error) showToast('Ошибка: ' + error.message, 'error');
     else { showToast('Матч добавлен', 'success'); loadMatchHistory(); }
@@ -934,6 +933,7 @@ async function saveAbsentStatuses() {
     if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
     if (document.getElementById('tab-stats').classList.contains('active')) loadMatchStats();
     if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
+    if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
     
     btn.disabled = false; btn.innerText = 'ПОДТВЕРДИТЬ';
     showToast('Статусы сохранены!', 'success');
@@ -1014,6 +1014,7 @@ async function confirmPhotoUpload() {
                 } else { notFound.push(p.nickname); }
             }
 
+            // Синхронизация с историей (запись матча)
             if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
                 const today = new Date().toISOString().split('T')[0];
                 const { error: matchError } = await supabaseClient.from('clan_matches').upsert({
@@ -1021,7 +1022,8 @@ async function confirmPhotoUpload() {
                     match_date: today,
                     clan_score: result.clan_score,
                     enemy_points: result.enemy_score,
-                    enemy_name: result.enemy_name || 'Неизвестный враг'
+                    enemy_name: result.enemy_name || 'Неизвестный враг',
+                    map_name: result.map_name || 'Низина' // Если ИИ распознает карту, она запишется, иначе ставим "Низина"
                 }, { onConflict: 'stage_number' });
 
                 if (!matchError) showToast(`Матч (Этап ${stageNum}) записан в Историю!`, 'info');
@@ -1050,6 +1052,7 @@ async function confirmPhotoUpload() {
                 if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
                 if (document.getElementById('tab-stats').classList.contains('active')) loadMatchStats();
                 if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
+                if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
                 showToast(`Успешно распознано ${added} игроков!`, 'success');
             }
         } else { statusDiv.innerHTML = `НЕ УДАЛОСЬ РАСПОЗНАТЬ.`; showToast('Ошибка распознавания', 'error'); }
