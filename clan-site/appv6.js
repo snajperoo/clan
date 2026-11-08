@@ -7,7 +7,7 @@ let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [];
 let currentEditId = null, maxAttendanceStage = 3, maxTournament = 4, isAdmin = false, currentPhotoFile = null;
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
 
-let myChart = null; // Переменная для графика истории
+let myChart = null;
 
 const ADMIN_SECRET_CODE = 'ADMIN123';
 const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
@@ -153,15 +153,31 @@ async function loadAllData() {
         const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectShotgun.appendChild(v);
     }
     
-    const { data: armorItems } = await supabaseClient.from('armor').select('name').order('name');
-    ['select-armor-combat', 'select-armor-combined'].forEach(id => {
-        const select = document.getElementById(id);
-        if (armorItems && select) { 
-            select.innerHTML = '<option value="">-- Выберите --</option>'; 
-            armorItems.forEach(i => { const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; select.appendChild(o); }); 
-            const v = document.createElement('option'); v.value = "Ветеранская"; v.textContent = "Ветеранская"; v.style.color = "var(--danger-color)"; select.appendChild(v);
-        }
-    });
+    // ============ БРОНЯ: разделение на боевую и комбинированную ============
+    const { data: armorItems } = await supabaseClient.from('armor').select('name, type').order('name');
+
+    const fillArmorSelect = (selectId, typeFilter) => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        select.innerHTML = '<option value="">-- Выберите --</option>';
+        (armorItems || [])
+            .filter(i => (i.type || 'combat') === typeFilter)
+            .forEach(i => {
+                const o = document.createElement('option');
+                o.value = i.name;
+                o.textContent = i.name;
+                select.appendChild(o);
+            });
+        const v = document.createElement('option');
+        v.value = "Ветеранская";
+        v.textContent = "Ветеранская";
+        v.style.color = "var(--danger-color)";
+        select.appendChild(v);
+    };
+
+    fillArmorSelect('select-armor-combat', 'combat');
+    fillArmorSelect('select-armor-combined', 'combined');
+    // =======================================================================
 
     initSearchableSelect('select-rifle');
     initSearchableSelect('select-smg');
@@ -272,6 +288,14 @@ async function selectPlayer(p) {
     const { data: missed } = await supabaseClient.from('attendance').select('status').eq('player_id', p.id).eq('status', 'Не пришел');
     const missedBox = document.getElementById('player-missed-stats');
     if (missedBox) { missedBox.style.display = 'block'; document.getElementById('pm-absent').innerText = missed ? missed.length : 0; }
+
+    // ============ ПОКАЗ И ЗАГРУЗКА ЗАМЕТОК ============
+    const coachWrapper = document.getElementById('player-notes-wrapper');
+    const tkWrapper = document.getElementById('player-timekeeper-notes-wrapper');
+    if (coachWrapper) coachWrapper.style.display = 'block';
+    if (tkWrapper) tkWrapper.style.display = 'block';
+    await loadPlayerNotes(p.id);
+    // ==================================================
 }
 
 function clearForm() {
@@ -286,6 +310,15 @@ function clearForm() {
     });
     document.getElementById('btn-delete').style.display = 'none';
     document.getElementById('player-missed-stats').style.display = 'none';
+
+    // Скрываем блоки заметок при создании нового
+    const coachWrapper = document.getElementById('player-notes-wrapper');
+    const tkWrapper = document.getElementById('player-timekeeper-notes-wrapper');
+    if (coachWrapper) coachWrapper.style.display = 'none';
+    if (tkWrapper) tkWrapper.style.display = 'none';
+    const coachList = document.getElementById('player-notes-list'); if (coachList) coachList.innerHTML = '';
+    const tkList = document.getElementById('player-timekeeper-notes-list'); if (tkList) tkList.innerHTML = '';
+
     renderPlayerList();
 }
 
@@ -986,6 +1019,74 @@ async function loadAnalytics() {
         }
     }
 }
+
+// ==================== ЗАМЕТКИ ТРЕНЕРА И ТАБЕЛЬЩИКА ====================
+async function loadPlayerNotes(playerId) {
+    const { data: notes, error } = await supabaseClient
+        .from('player_notes')
+        .select('*')
+        .eq('player_id', playerId)
+        .order('created_at', { ascending: false });
+
+    const coachList = document.getElementById('player-notes-list');
+    const tkList = document.getElementById('player-timekeeper-notes-list');
+    if (!coachList || !tkList) return;
+
+    if (error) {
+        coachList.innerHTML = `<div style="color:var(--danger-color); font-size:0.85em; text-align:center; padding:8px;">Ошибка: ${error.message}</div>`;
+        tkList.innerHTML = '';
+        return;
+    }
+
+    const coachNotes = (notes || []).filter(n => n.note_type === 'coach');
+    const tkNotes = (notes || []).filter(n => n.note_type === 'timekeeper');
+
+    const renderNotes = (arr) => arr.length === 0
+        ? '<div style="color:var(--text-muted); font-size:0.85em; text-align:center; padding:8px;">Заметок нет</div>'
+        : arr.map(n => {
+            const dateStr = n.created_at ? new Date(n.created_at).toLocaleDateString('ru-RU') : '';
+            return `
+            <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:var(--radius); padding:8px 10px; margin-bottom:6px; font-size:0.9em; display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+                <div style="flex:1; word-break:break-word;">
+                    <div style="color:var(--text-muted); font-size:0.75em; margin-bottom:3px;">${dateStr}</div>
+                    <div>${n.content}</div>
+                </div>
+                <button class="btn btn-danger" style="padding:2px 8px; font-size:0.75em;" onclick="deletePlayerNote(${n.id}, ${playerId})">✕</button>
+            </div>`;
+        }).join('');
+
+    coachList.innerHTML = renderNotes(coachNotes);
+    tkList.innerHTML = renderNotes(tkNotes);
+}
+
+async function addPlayerNote(type) {
+    if (!currentEditId) return showToast('Сначала выберите игрока', 'error');
+    const inputId = type === 'coach' ? 'player-note-input' : 'player-timekeeper-note-input';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return showToast('Введите текст заметки', 'error');
+
+    const { error } = await supabaseClient.from('player_notes').insert([{
+        player_id: currentEditId,
+        note_type: type,
+        content: content
+    }]);
+
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    input.value = '';
+    showToast('Заметка добавлена', 'success');
+    await loadPlayerNotes(currentEditId);
+}
+
+async function deletePlayerNote(noteId, playerId) {
+    if (!confirm('Удалить заметку?')) return;
+    const { error } = await supabaseClient.from('player_notes').delete().eq('id', noteId);
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    showToast('Заметка удалена', 'success');
+    await loadPlayerNotes(playerId);
+}
+// =======================================================================
 
 const ANALYTICS_CHANNEL_ID = '1567231595797028874';
 const ROSTER_CHANNEL_ID = '1567230953833627668';
