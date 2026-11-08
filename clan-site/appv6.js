@@ -3,7 +3,6 @@ const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz';
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ДОБАВЛЕНА ПЕРЕМЕННАЯ allNotes
 let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allNotes = [];
 let currentEditId = null, maxAttendanceStage = 3, maxTournament = 4, isAdmin = false, currentPhotoFile = null;
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
@@ -253,16 +252,28 @@ function renderPlayerList(filterText = '') {
         const div = document.createElement('div'); div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
         let sColor = 'var(--success-color)'; if (p.status === 'в обработке') sColor = 'var(--accent-color)'; if (p.status === 'кикнут') sColor = 'var(--danger-color)';
         
-        // СЧИТАЕМ ЗАМЕТКИ ДЛЯ ЭТОГО ИГРОКА
+        // СЧИТАЕМ ЗАМЕТКИ
         const pNotes = allNotes.filter(n => n.player_id === p.id);
         const coachCount = pNotes.filter(n => n.note_type === 'coach').length;
         const tkCount = pNotes.filter(n => n.note_type === 'timekeeper').length;
         
         let badges = '';
-        if (coachCount > 0) badges += `<span style="background:#4caf50; color:#000; padding:1px 5px; border-radius:10px; font-size:0.7em; margin-left:5px;" title="Заметки тренера">📝 ${coachCount}</span>`;
-        if (tkCount > 0) badges += `<span style="background:#9cdcfe; color:#000; padding:1px 5px; border-radius:10px; font-size:0.7em; margin-left:5px;" title="Заметки табельщика">📋 ${tkCount}</span>`;
+        if (coachCount > 0) badges += `<span style="background:#4caf50; color:#000; padding:2px 6px; border-radius:10px; font-size:0.75em; font-weight:bold; line-height:1; flex-shrink:0;" title="Заметки тренера">📝 ${coachCount}</span>`;
+        if (tkCount > 0) badges += `<span style="background:#9cdcfe; color:#000; padding:2px 6px; border-radius:10px; font-size:0.75em; font-weight:bold; line-height:1; flex-shrink:0;" title="Заметки табельщика">📋 ${tkCount}</span>`;
 
-        div.innerHTML = `<div style="display:flex; flex-direction:column;"><div style="display:flex; align-items:center;"><span style="font-weight:bold;">${p.nickname}</span>${badges}</div><span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span></div><span style="color:#888; font-size:0.8em;">${p.discord_id || 'ID: ' + p.id}</span>`;
+        // ИСПРАВЛЕННАЯ ВЕРСТКА КАРТОЧКИ
+        div.innerHTML = `
+            <div style="display:flex; flex-direction:column; flex: 1; min-width: 0; padding-right: 10px;">
+                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-bottom:4px;">
+                    <span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.nickname}">${p.nickname}</span>
+                    ${badges}
+                </div>
+                <span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span>
+            </div>
+            <div style="color:#888; font-size:0.75em; text-align:right; flex-shrink:0; max-width:110px; word-break:break-all; line-height:1.1;">
+                ${p.discord_id || 'ID: ' + p.id}
+            </div>
+        `;
         div.onclick = () => selectPlayer(p); container.appendChild(div);
     });
 }
