@@ -21,6 +21,26 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
+// ============ НАСТРОЙКИ РЕЙТИНГА И ГИЛЬЗ ============
+// Пороги рейтинга можно менять здесь
+const TIER_SETTINGS = [
+    { name: 'E', minRating: 0, winGears: 1250, lossGears: 250 },
+    { name: 'D', minRating: 1050, winGears: 1750, lossGears: 500 },
+    { name: 'C', minRating: 1150, winGears: 2400, lossGears: 800 },
+    { name: 'B', minRating: 1300, winGears: 3300, lossGears: 1200 },
+    { name: 'A', minRating: 1450, winGears: 4700, lossGears: 1800 },
+    { name: 'S', minRating: 1600, winGears: 7000, lossGears: 3000 }
+];
+
+function getTierData(rating) {
+    let current = TIER_SETTINGS[0];
+    for (let t of TIER_SETTINGS) {
+        if (rating >= t.minRating) current = t;
+    }
+    return current;
+}
+// ===================================================
+
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -105,7 +125,6 @@ async function loadAllData() {
     const { data: players } = await supabaseClient.from('players').select('*').order('kd', { ascending: false });
     if (players) { allPlayers = players; activePlayers = players.filter(p => !p.status || p.status === 'в клане'); renderTops(); renderPlayerList(); fillPlayerSelects(); }
     
-    // Загрузка заметок для отображения плашек в списке
     const { data: notesData } = await supabaseClient.from('player_notes').select('*');
     if (notesData) allNotes = notesData;
 
@@ -157,31 +176,18 @@ async function loadAllData() {
         const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectShotgun.appendChild(v);
     }
     
-    // ============ БРОНЯ: разделение на боевую и комбинированную ============
     const { data: armorItems } = await supabaseClient.from('armor').select('name, type').order('name');
-
     const fillArmorSelect = (selectId, typeFilter) => {
         const select = document.getElementById(selectId);
         if (!select) return;
         select.innerHTML = '<option value="">-- Выберите --</option>';
-        (armorItems || [])
-            .filter(i => (i.type || 'combat') === typeFilter)
-            .forEach(i => {
-                const o = document.createElement('option');
-                o.value = i.name;
-                o.textContent = i.name;
-                select.appendChild(o);
-            });
-        const v = document.createElement('option');
-        v.value = "Ветеранская";
-        v.textContent = "Ветеранская";
-        v.style.color = "var(--danger-color)";
-        select.appendChild(v);
+        (armorItems || []).filter(i => (i.type || 'combat') === typeFilter).forEach(i => {
+            const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; select.appendChild(o);
+        });
+        const v = document.createElement('option'); v.value = "Ветеранская"; v.textContent = "Ветеранская"; v.style.color = "var(--danger-color)"; select.appendChild(v);
     };
-
     fillArmorSelect('select-armor-combat', 'combat');
     fillArmorSelect('select-armor-combined', 'combined');
-    // =======================================================================
 
     initSearchableSelect('select-rifle');
     initSearchableSelect('select-smg');
@@ -252,7 +258,6 @@ function renderPlayerList(filterText = '') {
         const div = document.createElement('div'); div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
         let sColor = 'var(--success-color)'; if (p.status === 'в обработке') sColor = 'var(--accent-color)'; if (p.status === 'кикнут') sColor = 'var(--danger-color)';
         
-        // СЧИТАЕМ ЗАМЕТКИ
         const pNotes = allNotes.filter(n => n.player_id === p.id);
         const coachCount = pNotes.filter(n => n.note_type === 'coach').length;
         const tkCount = pNotes.filter(n => n.note_type === 'timekeeper').length;
@@ -261,7 +266,6 @@ function renderPlayerList(filterText = '') {
         if (coachCount > 0) badges += `<span style="background:#4caf50; color:#000; padding:2px 6px; border-radius:10px; font-size:0.75em; font-weight:bold; line-height:1; flex-shrink:0;" title="Заметки тренера">📝 ${coachCount}</span>`;
         if (tkCount > 0) badges += `<span style="background:#9cdcfe; color:#000; padding:2px 6px; border-radius:10px; font-size:0.75em; font-weight:bold; line-height:1; flex-shrink:0;" title="Заметки табельщика">📋 ${tkCount}</span>`;
 
-        // ИСПРАВЛЕННАЯ ВЕРСТКА КАРТОЧКИ
         div.innerHTML = `
             <div style="display:flex; flex-direction:column; flex: 1; min-width: 0; padding-right: 10px;">
                 <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-bottom:4px;">
@@ -316,7 +320,6 @@ async function selectPlayer(p) {
     const missedBox = document.getElementById('player-missed-stats');
     if (missedBox) { missedBox.style.display = 'block'; document.getElementById('pm-absent').innerText = missed ? missed.length : 0; }
 
-    // ПОКАЗ И ЗАГРУЗКА ЗАМЕТОК
     const coachWrapper = document.getElementById('player-notes-wrapper');
     const tkWrapper = document.getElementById('player-timekeeper-notes-wrapper');
     if (coachWrapper) coachWrapper.style.display = 'block';
@@ -337,7 +340,6 @@ function clearForm() {
     document.getElementById('btn-delete').style.display = 'none';
     document.getElementById('player-missed-stats').style.display = 'none';
 
-    // Скрываем блоки заметок при создании нового
     const coachWrapper = document.getElementById('player-notes-wrapper');
     const tkWrapper = document.getElementById('player-timekeeper-notes-wrapper');
     if (coachWrapper) coachWrapper.style.display = 'none';
@@ -648,7 +650,6 @@ function deleteStage() {
     maxAttendanceStage -= 3; loadMatchStats();
 }
 
-// ==================== ЛОГИКА СРАВНЕНИЯ ИГРОКОВ ====================
 function initCompareTab() {
     const p1Select = document.getElementById('compare-player-1');
     const p2Select = document.getElementById('compare-player-2');
@@ -712,24 +713,55 @@ function renderComparison() {
         </table>`;
 }
 
-// ==================== ИСТОРИЯ МАТЧЕЙ (КАЛЕНДАРЬ/ТАЙМЛАЙН) ====================
 async function loadMatchHistory() {
     const timeline = document.getElementById('history-timeline');
     if (!timeline) return;
     timeline.innerHTML = '<div style="text-align:center; width:100%;">Загрузка...</div>';
 
-    const { data: matches } = await supabaseClient.from('clan_matches').select('*').order('match_date', { ascending: false });
+    const { data: matches } = await supabaseClient.from('clan_matches').select('*').order('match_date', { ascending: true });
     
-    let wins = 0, losses = 0;
-    timeline.innerHTML = '';
-
+    let wins = 0, losses = 0, draws = 0;
+    let totalRating = 1000; // Стартовый рейтинг
+    let totalGears = 0;
+    
     if (!matches || matches.length === 0) {
         timeline.innerHTML = '<div style="text-align:center; width:100%;">Нет сохраненных матчей</div>';
-        renderHistoryChart(0, 0);
+        renderHistoryChart(0, 0, 0);
+        updateHistoryStats(1000, 'E', 0, 0, 0, 0);
         return;
     }
 
-    matches.forEach((match, index) => {
+    // 1. Рассчитываем статистику (от старых к новым)
+    matches.forEach(match => {
+        const cScore = match.clan_score || 0;
+        const eScore = match.enemy_points || 0;
+        
+        if (cScore > eScore) {
+            const currentTier = getTierData(totalRating);
+            totalRating += 50;
+            totalGears += currentTier.winGears;
+            wins++;
+        } else if (cScore < eScore) {
+            const currentTier = getTierData(totalRating);
+            totalRating -= 50;
+            // Забираем минималку (20% от счета противника)
+            if (cScore >= (eScore * 0.2)) {
+                totalGears += currentTier.lossGears;
+            }
+            losses++;
+        } else {
+            draws++;
+        }
+    });
+
+    const finalTier = getTierData(totalRating);
+    updateHistoryStats(totalRating, finalTier.name, totalGears, wins, losses, draws);
+
+    // 2. Отрисовываем таймлайн (от новых к старым)
+    timeline.innerHTML = '';
+    const reversedMatches = [...matches].reverse();
+    
+    reversedMatches.forEach((match, index) => {
         const isLeft = index % 2 === 0;
         const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
         const cScore = match.clan_score || 0;
@@ -738,8 +770,8 @@ async function loadMatchHistory() {
 
         let scoreClass = '';
         let winText = '';
-        if (cScore > eScore) { scoreClass = 'score-win'; winText = 'ПОБЕДА'; wins++; }
-        else if (cScore < eScore) { scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; losses++; }
+        if (cScore > eScore) { scoreClass = 'score-win'; winText = 'ПОБЕДА'; }
+        else if (cScore < eScore) { scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; }
         else { winText = 'НИЧЬЯ'; }
 
         const adminEdit = isAdmin ? `
@@ -770,7 +802,32 @@ async function loadMatchHistory() {
         `;
     });
 
-    renderHistoryChart(wins, losses);
+    renderHistoryChart(wins, losses, draws);
+}
+
+function updateHistoryStats(rating, tierName, gears, wins, losses, draws) {
+    const ratingEl = document.getElementById('hr-rating');
+    if (ratingEl) ratingEl.innerText = rating;
+    
+    const tierEl = document.getElementById('hr-tier');
+    if (tierEl) tierEl.innerText = tierName + ' Тир';
+    
+    const gearsEl = document.getElementById('hr-gears');
+    if (gearsEl) gearsEl.innerText = gears;
+
+    const total = wins + losses + draws;
+    const winPct = total > 0 ? Math.round((wins / total) * 100) : 0;
+    const lossPct = total > 0 ? Math.round((losses / total) * 100) : 0;
+    const drawPct = total > 0 ? Math.round((draws / total) * 100) : 0;
+
+    const hrWins = document.getElementById('hr-wins'); if (hrWins) hrWins.innerText = wins;
+    const hrLosses = document.getElementById('hr-losses'); if (hrLosses) hrLosses.innerText = losses;
+    const hrDraws = document.getElementById('hr-draws'); if (hrDraws) hrDraws.innerText = draws;
+    const hrTotal = document.getElementById('hr-total'); if (hrTotal) hrTotal.innerText = total;
+
+    const hrWinsPct = document.getElementById('hr-wins-pct'); if (hrWinsPct) hrWinsPct.innerText = winPct + '%';
+    const hrLossesPct = document.getElementById('hr-losses-pct'); if (hrLossesPct) hrLossesPct.innerText = lossPct + '%';
+    const hrDrawsPct = document.getElementById('hr-draws-pct'); if (hrDrawsPct) hrDrawsPct.innerText = drawPct + '%';
 }
 
 async function addMatchHistory() {
@@ -799,21 +856,21 @@ async function deleteMatch(id) {
     else { showToast('Матч удален', 'success'); loadMatchHistory(); }
 }
 
-function renderHistoryChart(wins, losses) {
+function renderHistoryChart(wins, losses, draws = 0) {
     const canvas = document.getElementById('matchHistoryChart');
     if (!canvas) return;
 
     if (myChart) { myChart.destroy(); }
 
-    const hasData = wins > 0 || losses > 0;
+    const hasData = wins > 0 || losses > 0 || draws > 0;
     
     myChart = new Chart(canvas, {
         type: 'doughnut',
         data: {
-            labels: ['Победы', 'Поражения'],
+            labels: ['Победы', 'Поражения', 'Ничьи'],
             datasets: [{
-                data: hasData ? [wins, losses] : [1, 0],
-                backgroundColor: hasData ? ['#4caf50', '#e53935'] : ['#2a3a2a', '#2a3a2a'],
+                data: hasData ? [wins, losses, draws] : [1, 0, 0],
+                backgroundColor: hasData ? ['#4caf50', '#e53935', '#ff9800'] : ['#2a3a2a', '#2a3a2a', '#2a3a2a'],
                 borderColor: '#0d0f0d',
                 borderWidth: 2
             }]
@@ -1046,7 +1103,6 @@ async function loadAnalytics() {
     }
 }
 
-// ==================== ЗАМЕТКИ ТРЕНЕРА И ТАБЕЛЬЩИКА ====================
 async function loadPlayerNotes(playerId) {
     const { data: notes, error } = await supabaseClient
         .from('player_notes')
@@ -1103,7 +1159,6 @@ async function addPlayerNote(type) {
     input.value = '';
     showToast('Заметка добавлена', 'success');
     
-    // Обновляем кэш заметок и перерисовываем левый список, чтобы появились плашки
     const { data: notesData } = await supabaseClient.from('player_notes').select('*');
     if (notesData) { allNotes = notesData; renderPlayerList(); }
     
@@ -1116,13 +1171,11 @@ async function deletePlayerNote(noteId, playerId) {
     if (error) return showToast('Ошибка: ' + error.message, 'error');
     showToast('Заметка удалена', 'success');
     
-    // Обновляем кэш заметок и перерисовываем левый список
     const { data: notesData } = await supabaseClient.from('player_notes').select('*');
     if (notesData) { allNotes = notesData; renderPlayerList(); }
 
     await loadPlayerNotes(playerId);
 }
-// =======================================================================
 
 const ANALYTICS_CHANNEL_ID = '1567231595797028874';
 const ROSTER_CHANNEL_ID = '1567230953833627668';
