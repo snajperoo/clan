@@ -649,6 +649,8 @@ function deleteStage() {
 function initCompareTab() {
     const p1Select = document.getElementById('compare-player-1');
     const p2Select = document.getElementById('compare-player-2');
+    if (!p1Select || !p2Select) return; // Защита от ошибки, если HTML не обновлен
+
     if (p1Select.tomselect) p1Select.tomselect.destroy();
     if (p2Select.tomselect) p2Select.tomselect.destroy();
 
@@ -1014,7 +1016,6 @@ async function confirmPhotoUpload() {
                 } else { notFound.push(p.nickname); }
             }
 
-            // Синхронизация с историей (запись матча)
             if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
                 const today = new Date().toISOString().split('T')[0];
                 const { error: matchError } = await supabaseClient.from('clan_matches').upsert({
@@ -1023,7 +1024,7 @@ async function confirmPhotoUpload() {
                     clan_score: result.clan_score,
                     enemy_points: result.enemy_score,
                     enemy_name: result.enemy_name || 'Неизвестный враг',
-                    map_name: result.map_name || 'Низина' // Если ИИ распознает карту, она запишется, иначе ставим "Низина"
+                    map_name: result.map_name || 'Низина'
                 }, { onConflict: 'stage_number' });
 
                 if (!matchError) showToast(`Матч (Этап ${stageNum}) записан в Историю!`, 'info');
