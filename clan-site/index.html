@@ -23,11 +23,6 @@
         .ts-dropdown .option.active { background-color: rgba(255, 152, 0, 0.2) !important; color: var(--accent-color) !important; }
         .ts-dropdown .option:hover { background-color: rgba(255,255,255,0.05); }
         .ts-control > input { color: var(--text-color) !important; }
-        .custom-context-menu { position: fixed; display: none; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius); box-shadow: 0 5px 15px rgba(0,0,0,0.8); z-index: 10000; min-width: 180px; overflow: hidden; backdrop-filter: blur(5px); }
-        .context-item { padding: 12px 15px; cursor: pointer; font-family: 'Courier New', monospace; color: var(--text-color); font-size: 0.9em; transition: 0.1s; display: flex; align-items: center; gap: 10px; }
-        .context-item:hover { background: var(--accent-color); color: #000; }
-        .context-item.danger { color: var(--danger-color); }
-        .context-item.danger:hover { background: var(--danger-color); color: #fff; }
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-color); margin: 0; padding: 0; transition: 0.3s; min-height: 100vh; }
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
@@ -161,16 +156,11 @@
 </head>
 <body>
     <div id="toast-container"></div>
-    <div id="custom-context-menu" class="custom-context-menu"></div>
 
     <div class="container">
         <div class="header">
             <h1>STALZONE КЛАН</h1>
             <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
-                <div style="display:flex; align-items:center; gap:8px; background:var(--card-bg); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border-color);">
-                    <span style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Сезон:</span>
-                    <select id="season-selector" style="background:transparent; color:var(--accent-color); border:none; padding:4px; font-family:'Courier New', monospace; font-weight:bold; cursor:pointer; font-size:1em; outline:none;"><option>Текущий</option></select>
-                </div>
                 <button class="theme-toggle" id="logout-btn" onclick="logout()" style="display:none;">Выход</button>
             </div>
         </div>
@@ -182,6 +172,7 @@
             <button class="tab-btn" onclick="openTab(event, 'tab-roster')">Состав</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-compare')">Сравнение</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-history')">История</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-calendar')">📅 Календарь</button>
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-fines')">Штрафы</button>
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-attendance')">Посещаемость</button>
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-missed')">Пропуски</button>
@@ -273,7 +264,6 @@
                         </div>
                     </div>
                     
-                    <!-- Блок заметок тренера -->
                     <div id="player-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
                         <h3 style="color:var(--accent-color); margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📝 Заметки тренера</h3>
                         <div id="player-notes-list" style="max-height:260px; overflow-y:auto; margin-bottom:10px;"></div>
@@ -283,7 +273,6 @@
                         <button class="btn" onclick="addPlayerNote('coach')" style="width:100%; padding:8px;">+ Добавить заметку</button>
                     </div>
 
-                    <!-- Блок заметок табельщика -->
                     <div id="player-timekeeper-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
                         <h3 style="color:#9cdcfe; margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📋 Заметки табельщика</h3>
                         <div id="player-timekeeper-notes-list" style="max-height:260px; overflow-y:auto; margin-bottom:10px;"></div>
@@ -327,12 +316,12 @@
             <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Сравнение</h2>
             <div style="max-width: 900px; margin: 0 auto 25px auto;">
                 <div class="form-grid-2">
-                    <div class="form-group"><label>Боец 1</label><select id="compare-player-1"></select></div>
-                    <div class="form-group"><label>Боец 2</label><select id="compare-player-2"></select></div>
+                    <div class="form-group"><label>Бойцы (до 4-х)</label><select id="compare-players" multiple></select></div>
+                    <div class="form-group"><label>Период</label><select id="compare-period"></select></div>
                 </div>
             </div>
             <div id="compare-results" style="max-width: 1100px; margin: 0 auto; overflow-x: auto;">
-                <div style="text-align:center; color:var(--text-muted); padding: 20px; text-transform: uppercase;">Выберите двух бойцов</div>
+                <div style="text-align:center; color:var(--text-muted); padding: 20px; text-transform: uppercase;">Выберите бойцов</div>
             </div>
         </div>
 
@@ -368,6 +357,25 @@
             </div>
             <div style="display:flex; justify-content:center; margin-bottom: 20px; gap: 10px;" class="admin-only"><button class="btn" onclick="addMatchHistory()">Заполнить первый свободный этап</button></div>
             <div class="timeline" id="history-timeline"></div>
+        </div>
+
+        <!-- КАЛЕНДАРЬ -->
+        <div id="tab-calendar" class="tab-content">
+            <div class="stage-header"><h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">📅 Календарь турниров</h2></div>
+            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--border-color); display:none;">
+                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать турнир</h3>
+                <div class="form-grid-3">
+                    <div class="form-group"><label>Дата турнира</label><input type="date" id="cal-date"></div>
+                    <div class="form-group"><label>Время начала</label><input type="time" id="cal-time"></div>
+                    <div class="form-group"><label>Номер турнира</label><input type="number" id="cal-tournament" placeholder="Например: 3"></div>
+                </div>
+                <div class="form-grid-2">
+                    <div class="form-group"><label>Заметки</label><input type="text" id="cal-notes" placeholder="Сбор в 19:30"></div>
+                    <div class="form-group"><label>Номер этапа (опционально)</label><input type="number" id="cal-stage" placeholder="Оставьте пустым для всех 3-х"><small style="color:var(--accent-color); display:block; margin-top:5px; font-size:0.8em;">Если оставить пустым, создадутся 3 этапа на выбранную дату.</small></div>
+                </div>
+                <button class="btn" onclick="addUpcomingMatch()" style="margin-top:10px;">Добавить в календарь</button>
+            </div>
+            <div id="calendar-list"></div>
         </div>
 
         <!-- ШТРАФЫ -->
