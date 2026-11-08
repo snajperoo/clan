@@ -86,6 +86,7 @@ function openTab(evt, tabName) {
     if (tabName === 'tab-profile') renderPlayerList();
     if (tabName === 'tab-compare') initCompareTab();
     if (tabName === 'tab-history') loadMatchHistory();
+    if (tabName === 'tab-calendar') loadCalendar();
     if (tabName === 'tab-fines') loadFines();
     if (tabName === 'tab-attendance') loadAttendance();
     if (tabName === 'tab-missed') loadAllMissed();
@@ -171,7 +172,6 @@ async function loadAllData() {
         const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectShotgun.appendChild(v);
     }
     
-    // ============ БРОНЯ ============
     const { data: armorItems } = await supabaseClient.from('armor').select('name, type').order('name');
     const fillArmorSelect = (selectId, typeFilter) => {
         const select = document.getElementById(selectId);
@@ -567,10 +567,17 @@ async function loadAllMissed() {
 
 async function updateMissedStatus(playerId, globalStage, newStatus) {
     if (!isAdmin) return;
-    if (newStatus === 'Удалить') { await supabaseClient.from('attendance').delete().eq('player_id', playerId).eq('tournament_number', globalStage); }
-    else { await supabaseClient.from('attendance').upsert({ player_id: playerId, tournament_number: globalStage, status: newStatus }, { onConflict: 'player_id, tournament_number' }); }
+    if (newStatus === 'Удалить') { 
+        await supabaseClient.from('attendance').delete().eq('player_id', playerId).eq('tournament_number', globalStage); 
+    } else { 
+        await supabaseClient.from('attendance').upsert({ player_id: playerId, tournament_number: globalStage, status: newStatus }, { onConflict: 'player_id, tournament_number' }); 
+    }
+    
+    // Синхронизация
     await loadAllMissed();
-    loadAttendance(); 
+    await loadAttendance(); 
+    await loadMatchStats();
+    showToast('Статус обновлен', 'success');
 }
 
 async function loadMatchStats() {
@@ -646,33 +653,46 @@ function deleteStage() {
     maxAttendanceStage -= 3; loadMatchStats();
 }
 
+// ==================== ЛОГИКА СРАВНЕНИЯ (ДО 4 ЧЕЛОВЕК) ====================
 function initCompareTab() {
-    const p1Select = document.getElementById('compare-player-1');
-    const p2Select = document.getElementById('compare-player-2');
-    if (!p1Select || !p2Select) return;
+    const select = document.getElementById('compare-players');
+    const periodSelect = document.getElementById('compare-period');
+    if (!select || !periodSelect) return;
 
-    if (p1Select.tomselect) p1Select.tomselect.destroy();
-    if (p2Select.tomselect) p2Select.tomselect.destroy();
+    if (select.tomselect) select.tomselect.destroy();
+    if (periodSelect.tomselect) periodSelect.tomselect.destroy();
 
-    let options = '<option value="">-- Выберите игрока --</option>';
+    let options = '';
     activePlayers.forEach(p => { options += `<option value="${p.id}">${p.nickname}</option>`; });
-    p1Select.innerHTML = options; p2Select.innerHTML = options;
+    select.innerHTML = options;
 
-    new TomSelect(p1Select, { create: false, sortField: { field: "text", direction: "asc" }, maxItems: 1, dropdownDirection: 'down', onChange: () => renderComparison() });
-    new TomSelect(p2Select, { create: false, sortField: { field: "text", direction: "asc" }, maxItems: 1, dropdownDirection: 'down', onChange: () => renderComparison() });
+    new TomSelect(select, { 
+        create: false, 
+        sortField: { field: "text", direction: "asc" }, 
+        maxItems: 4, 
+        plugins: ['remove_button'],
+        onChange: () => renderComparison() 
+    });
+    
+    new TomSelect(periodSelect, {
+        create: false, onChange: () => renderComparison()
+    });
 }
 
 function renderComparison() {
-    const p1Id = document.getElementById('compare-player-1').value;
-    const p2Id = document.getElementById('compare-player-2').value;
+    const selectEl = document.getElementById('compare-players');
+    const periodEl = document.getElementById('compare-period');
     const container = document.getElementById('compare-results');
+    if (!selectEl || !selectEl.tomselect) return;
 
-    if (!p1Id || !p2Id) { container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding: 20px; text-transform: uppercase;">Выберите двух бойцов</div>'; return; }
-    const p1 = allPlayers.find(x => x.id == p1Id), p2 = allPlayers.find(x => x.id == p2Id);
-    if (!p1 || !p2) return;
+    const selectedIds = Array.from(selectEl.tomselect.getValue());
+    
+    if (selectedIds.length < 2) { 
+        container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding: 20px; text-transform: uppercase;">Выберите хотя бы двух бойцов</div>'; 
+        return; 
+    }
 
-    const missed1 = allAttendance.filter(a => a.player_id === p1.id && a.status === 'Не пришел').length;
-    const missed2 = allAttendance.filter(a => a.player_id === p2.id && a.status === 'Не пришел').length;
+    const players = selectedIds.map(id => allPlayers.find(p => p.id == id)).filter(Boolean);
 
     const formatCompare = (val1, val2, higherIsBetter = true) => {
         if (val1 === val2) return { v1: val1, v2: val2 };
@@ -680,36 +700,53 @@ function renderComparison() {
         return { v1: `<span class="${is1Better ? 'compare-winner' : 'compare-loser'}">${val1}</span>`, v2: `<span class="${!is1Better ? 'compare-winner' : 'compare-loser'}">${val2}</span>` };
     };
 
-    const kdComp = formatCompare(p1.kd, p2.kd, true);
-    const kdaComp = formatCompare(p1.kda, p2.kda, true);
-    const ptsComp = formatCompare(p1.points, p2.points, true);
-    const missedComp = formatCompare(missed1, missed2, false);
+    let thead = '<thead><tr><th>Характеристика</th>';
+    players.forEach(p => { thead += `<th>${p.nickname} ${p.squad ? `<br><small style="color:var(--text-muted)">${p.squad}</small>` : ''}</th>`; });
+    thead += '</tr></thead>';
 
-    const sledgeHtml1 = p1.has_sledgehammer ? '<span class="compare-winner">🔨 Есть</span>' : '<span class="compare-loser">❌ Нет</span>';
-    const sledgeHtml2 = p2.has_sledgehammer ? '<span class="compare-winner">🔨 Есть</span>' : '<span class="compare-loser">❌ Нет</span>';
-    const finalSledge1 = (p1.has_sledgehammer === p2.has_sledgehammer) ? (p1.has_sledgehammer ? '🔨 Есть' : '❌ Нет') : sledgeHtml1;
-    const finalSledge2 = (p1.has_sledgehammer === p2.has_sledgehammer) ? (p2.has_sledgehammer ? '🔨 Есть' : '❌ Нет') : sledgeHtml2;
+    const stats = [
+        { label: 'КД (K/D)', key: 'kd', higher: true },
+        { label: 'КДА (KDA)', key: 'kda', higher: true },
+        { label: 'Очки', key: 'points', higher: true },
+        { label: 'Кувалда', key: 'has_sledgehammer', isBool: true },
+        { label: 'Автомат', key: 'main_rifle' },
+        { label: 'ПП', key: 'main_smg' },
+        { label: 'Снайперка', key: 'sniper' },
+        { label: 'Пистолет', key: 'secondary_pistol' },
+        { label: 'Пулемет', key: 'machine_gun' },
+        { label: 'Дробовик', key: 'shotgun' },
+        { label: 'Боевая броня', key: 'armor_combat' },
+        { label: 'Комбинированная', key: 'armor_combined' },
+    ];
 
-    container.innerHTML = `
-        <table class="compare-table">
-            <thead><tr><th>Характеристика</th><th>${p1.nickname} ${p1.squad ? `(${p1.squad})` : ''}</th><th>${p2.nickname} ${p2.squad ? `(${p2.squad})` : ''}</th></tr></thead>
-            <tbody>
-                <tr><td>КД (K/D)</td><td>${kdComp.v1}</td><td>${kdComp.v2}</td></tr>
-                <tr><td>КДА (KDA)</td><td>${kdaComp.v1}</td><td>${kdaComp.v2}</td></tr>
-                <tr><td>Очки</td><td>${ptsComp.v1}</td><td>${ptsComp.v2}</td></tr>
-                <tr><td>Прогулы</td><td>${missedComp.v1}</td><td>${missedComp.v2}</td></tr>
-                <tr><td>Кувалда</td><td>${finalSledge1}</td><td>${finalSledge2}</td></tr>
-                <tr><td>Автомат</td><td>${p1.main_rifle || '-'}</td><td>${p2.main_rifle || '-'}</td></tr>
-                <tr><td>ПП</td><td>${p1.main_smg || '-'}</td><td>${p2.main_smg || '-'}</td></tr>
-                <tr><td>Снайперка</td><td>${p1.sniper || '-'}</td><td>${p2.sniper || '-'}</td></tr>
-                <tr><td>Пистолет</td><td>${p1.secondary_pistol || '-'}</td><td>${p2.secondary_pistol || '-'}</td></tr>
-                <tr><td>Пулемет</td><td>${p1.machine_gun || '-'}</td><td>${p2.machine_gun || '-'}</td></tr>
-                <tr><td>Дробовик</td><td>${p1.shotgun || '-'}</td><td>${p2.shotgun || '-'}</td></tr>
-                <tr><td>Боевая броня</td><td>${p1.armor_combat || '-'}</td><td>${p2.armor_combat || '-'}</td></tr>
-                <tr><td>Комбинированная</td><td>${p1.armor_combined || '-'}</td><td>${p2.armor_combined || '-'}</td></tr>
-            </tbody>
-        </table>`;
+    let tbody = '<tbody>';
+    stats.forEach(stat => {
+        tbody += `<tr><td>${stat.label}</td>`;
+        
+        let bestVal = null;
+        if (stat.higher) {
+            bestVal = Math.max(...players.map(p => stat.isBool ? (p[stat.key] ? 1 : 0) : (parseFloat(p[stat.key]) || 0)));
+        }
+
+        players.forEach(p => {
+            let val = p[stat.key];
+            if (stat.isBool) {
+                tbody += `<td>${val ? '<span class="compare-winner">🔨 Есть</span>' : '<span class="compare-loser">❌ Нет</span>'}</td>`;
+            } else if (stat.higher) {
+                let numVal = parseFloat(val) || 0;
+                let isWinner = numVal === bestVal && players.filter(x => (parseFloat(x[stat.key]) || 0) === bestVal).length < players.length;
+                tbody += `<td class="${isWinner ? 'compare-winner' : ''}">${val !== null && val !== undefined && val !== '' ? val : '-'}</td>`;
+            } else {
+                tbody += `<td>${val !== null && val !== undefined && val !== '' ? val : '-'}</td>`;
+            }
+        });
+        tbody += '</tr>';
+    });
+    tbody += '</tbody>';
+
+    container.innerHTML = `<table class="compare-table">${thead}${tbody}</table>`;
 }
+// =======================================================================
 
 async function loadMatchHistory() {
     const timeline = document.getElementById('history-timeline');
@@ -887,6 +924,67 @@ function renderHistoryChart(wins, losses, draws = 0) {
         }
     });
 }
+
+// ==================== КАЛЕНДАРЬ ====================
+async function loadCalendar() {
+    const list = document.getElementById('calendar-list');
+    if (!list) return;
+    list.innerHTML = 'Загрузка...';
+
+    const { data: events } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true });
+    
+    if (!events || events.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет запланированных турниров</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    events.forEach(e => {
+        const dateStr = e.match_date ? new Date(e.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const timeStr = e.match_time ? e.match_time.slice(0, 5) : '';
+        
+        list.innerHTML += `
+            <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="color:var(--accent-color); font-weight:bold; font-size:1.2em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''}</div>
+                    <div style="margin-top:5px;">Турнир: <strong>${e.tournament_number || '-'}</strong> ${e.stage_number ? '| Этап: ' + e.stage_number : ''}</div>
+                    <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${e.notes || ''}</div>
+                </div>
+                ${isAdmin ? `<button class="btn btn-danger" onclick="deleteCalendarEvent(${e.id})">X</button>` : ''}
+            </div>
+        `;
+    });
+}
+
+async function addUpcomingMatch() {
+    if (!isAdmin) return;
+    const date = document.getElementById('cal-date').value;
+    const time = document.getElementById('cal-time').value;
+    const tourney = parseInt(document.getElementById('cal-tournament').value) || null;
+    const stage = parseInt(document.getElementById('cal-stage').value) || null;
+    const notes = document.getElementById('cal-notes').value.trim();
+
+    if (!date) return showToast('Выберите дату', 'error');
+
+    const { error } = await supabaseClient.from('clan_calendar').insert([{
+        match_date: date,
+        match_time: time || null,
+        tournament_number: tourney,
+        stage_number: stage,
+        notes: notes
+    }]);
+
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    showToast('Турнир добавлен в календарь', 'success');
+    loadCalendar();
+}
+
+async function deleteCalendarEvent(id) {
+    if (!isAdmin || !confirm('Удалить это событие?')) return;
+    await supabaseClient.from('clan_calendar').delete().eq('id', id);
+    loadCalendar();
+}
+// ==================================================
 
 async function loadFines() {
     const { data } = await supabaseClient.from('fines').select('*, players(nickname)').order('created_at', { ascending: false });
