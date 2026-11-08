@@ -21,8 +21,6 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// ============ НАСТРОЙКИ РЕЙТИНГА И ГИЛЬЗ ============
-// Пороги рейтинга можно менять здесь
 const TIER_SETTINGS = [
     { name: 'E', minRating: 0, winGears: 1250, lossGears: 250 },
     { name: 'D', minRating: 1050, winGears: 1750, lossGears: 500 },
@@ -34,12 +32,9 @@ const TIER_SETTINGS = [
 
 function getTierData(rating) {
     let current = TIER_SETTINGS[0];
-    for (let t of TIER_SETTINGS) {
-        if (rating >= t.minRating) current = t;
-    }
+    for (let t of TIER_SETTINGS) { if (rating >= t.minRating) current = t; }
     return current;
 }
-// ===================================================
 
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
@@ -721,7 +716,7 @@ async function loadMatchHistory() {
     const { data: matches } = await supabaseClient.from('clan_matches').select('*').order('match_date', { ascending: true });
     
     let wins = 0, losses = 0, draws = 0;
-    let totalRating = 1000; // Стартовый рейтинг
+    let totalRating = 1000;
     let totalGears = 0;
     
     if (!matches || matches.length === 0) {
@@ -731,7 +726,6 @@ async function loadMatchHistory() {
         return;
     }
 
-    // 1. Рассчитываем статистику (от старых к новым)
     matches.forEach(match => {
         const cScore = match.clan_score || 0;
         const eScore = match.enemy_points || 0;
@@ -744,7 +738,6 @@ async function loadMatchHistory() {
         } else if (cScore < eScore) {
             const currentTier = getTierData(totalRating);
             totalRating -= 50;
-            // Забираем минималку (20% от счета противника)
             if (cScore >= (eScore * 0.2)) {
                 totalGears += currentTier.lossGears;
             }
@@ -757,7 +750,6 @@ async function loadMatchHistory() {
     const finalTier = getTierData(totalRating);
     updateHistoryStats(totalRating, finalTier.name, totalGears, wins, losses, draws);
 
-    // 2. Отрисовываем таймлайн (от новых к старым)
     timeline.innerHTML = '';
     const reversedMatches = [...matches].reverse();
     
@@ -767,6 +759,7 @@ async function loadMatchHistory() {
         const cScore = match.clan_score || 0;
         const eScore = match.enemy_points || 0;
         const opponent = match.enemy_name || 'Неизвестный враг';
+        const mapName = match.map_name || 'Карта не указана';
 
         let scoreClass = '';
         let winText = '';
@@ -778,6 +771,7 @@ async function loadMatchHistory() {
             <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 10px;">
                 <input type="date" value="${match.match_date || ''}" onchange="updateMatchData(${match.id}, 'date', this.value)" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
                 <input type="text" value="${opponent}" onchange="updateMatchData(${match.id}, 'enemy_name', this.value)" placeholder="Имя врага" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
+                <input type="text" value="${match.map_name || ''}" onchange="updateMatchData(${match.id}, 'map_name', this.value)" placeholder="Название карты" style="background:var(--input-bg); color:#ff9800; border:1px solid var(--border-color); padding:5px; border-radius:4px; font-weight:bold;">
                 <div style="display:flex; gap:5px;">
                     <input type="number" value="${cScore}" onchange="updateMatchData(${match.id}, 'clan_score', this.value)" placeholder="Наши очки" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
                     <input type="number" value="${eScore}" onchange="updateMatchData(${match.id}, 'enemy_points', this.value)" placeholder="Очки врага" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
@@ -787,11 +781,13 @@ async function loadMatchHistory() {
         ` : '';
 
         const stageBadge = match.stage_number ? `<div style="font-size:0.8em; color:var(--accent-color); margin-bottom:5px;">Этап ${match.stage_number}</div>` : '';
+        const mapBadge = `<div style="font-size:0.85em; color:#9cdcfe; margin-bottom:5px;">🗺️ ${mapName}</div>`;
 
         timeline.innerHTML += `
             <div class="timeline-item ${isLeft ? 'left' : 'right'}">
                 <div class="timeline-content">
                     ${stageBadge}
+                    ${mapBadge}
                     <div class="timeline-date">${dateStr}</div>
                     <div class="timeline-opponent">vs <strong>${opponent}</strong></div>
                     <div class="timeline-score ${scoreClass}">${cScore} : ${eScore}</div>
@@ -806,14 +802,9 @@ async function loadMatchHistory() {
 }
 
 function updateHistoryStats(rating, tierName, gears, wins, losses, draws) {
-    const ratingEl = document.getElementById('hr-rating');
-    if (ratingEl) ratingEl.innerText = rating;
-    
-    const tierEl = document.getElementById('hr-tier');
-    if (tierEl) tierEl.innerText = tierName + ' Тир';
-    
-    const gearsEl = document.getElementById('hr-gears');
-    if (gearsEl) gearsEl.innerText = gears;
+    const ratingEl = document.getElementById('hr-rating'); if (ratingEl) ratingEl.innerText = rating;
+    const tierEl = document.getElementById('hr-tier'); if (tierEl) tierEl.innerText = tierName + ' Тир';
+    const gearsEl = document.getElementById('hr-gears'); if (gearsEl) gearsEl.innerText = gears;
 
     const total = wins + losses + draws;
     const winPct = total > 0 ? Math.round((wins / total) * 100) : 0;
@@ -833,8 +824,9 @@ function updateHistoryStats(rating, tierName, gears, wins, losses, draws) {
 async function addMatchHistory() {
     const date = prompt("Введите дату матча (ГГГГ-ММ-ДД):", new Date().toISOString().split('T')[0]);
     if (!date) return;
+    const mapName = prompt("Введите название карты (или оставьте пустым):", "");
     
-    const { error } = await supabaseClient.from('clan_matches').insert([{ match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг' }]);
+    const { error } = await supabaseClient.from('clan_matches').insert([{ match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг', map_name: mapName }]);
     if (error) showToast('Ошибка: ' + error.message, 'error');
     else { showToast('Матч добавлен', 'success'); loadMatchHistory(); }
 }
@@ -1058,7 +1050,8 @@ async function confirmPhotoUpload() {
 }
 
 async function loadAnalytics() {
-    const { data: players } = await supabaseClient.from('players').select('*'); if (!players) return;
+    const { data: players } = await supabaseClient.from('players').select('*'); 
+    if (!players) return;
     const active = players.filter(p => !p.status || p.status ===  'в клане');
     
     const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10);
@@ -1101,6 +1094,31 @@ async function loadAnalytics() {
             }
         }
     }
+
+    // ==================== СТАТИСТИКА ПО КАРТАМ ====================
+    const mapStatsBody = document.querySelector('#map-stats-table tbody');
+    if (mapStatsBody) {
+        const { data: matches } = await supabaseClient.from('clan_matches').select('*');
+        if (matches && matches.length > 0) {
+            const mapData = {};
+            matches.forEach(m => {
+                const map = m.map_name ? m.map_name.trim() : 'Неизвестная';
+                if (!mapData[map]) mapData[map] = { games: 0, wins: 0 };
+                mapData[map].games++;
+                if (m.clan_score > m.enemy_points) mapData[map].wins++;
+            });
+            
+            const sortedMaps = Object.entries(mapData).sort((a, b) => b[1].games - a[1].games);
+            mapStatsBody.innerHTML = sortedMaps.map(([name, data]) => {
+                const wr = Math.round((data.wins / data.games) * 100);
+                const wrColor = wr >= 50 ? 'var(--success-color)' : 'var(--danger-color)';
+                return `<tr><td>${name}</td><td>${data.games}</td><td>${data.wins}</td><td style="color:${wrColor}; font-weight:bold;">${wr}%</td></tr>`;
+            }).join('');
+        } else {
+            mapStatsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных о картах</td></tr>';
+        }
+    }
+    // ================================================================
 }
 
 async function loadPlayerNotes(playerId) {
