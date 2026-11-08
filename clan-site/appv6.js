@@ -21,7 +21,6 @@ const SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// Настройки рейтинга и гильз
 const TIER_SETTINGS = [
     { name: 'E', minRating: 0, winGears: 1250, lossGears: 250 },
     { name: 'D', minRating: 1050, winGears: 1750, lossGears: 500 },
@@ -172,6 +171,7 @@ async function loadAllData() {
         const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectShotgun.appendChild(v);
     }
     
+    // ============ БРОНЯ ============
     const { data: armorItems } = await supabaseClient.from('armor').select('name, type').order('name');
     const fillArmorSelect = (selectId, typeFilter) => {
         const select = document.getElementById(selectId);
@@ -649,7 +649,7 @@ function deleteStage() {
 function initCompareTab() {
     const p1Select = document.getElementById('compare-player-1');
     const p2Select = document.getElementById('compare-player-2');
-    if (!p1Select || !p2Select) return; // Защита от ошибки, если HTML не обновлен
+    if (!p1Select || !p2Select) return;
 
     if (p1Select.tomselect) p1Select.tomselect.destroy();
     if (p2Select.tomselect) p2Select.tomselect.destroy();
