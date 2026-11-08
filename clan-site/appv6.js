@@ -759,7 +759,7 @@ async function loadMatchHistory() {
         const cScore = match.clan_score || 0;
         const eScore = match.enemy_points || 0;
         const opponent = match.enemy_name || 'Неизвестный враг';
-        const mapName = match.map_name || 'Карта не указана';
+        const mapName = match.map_name || 'Не указана';
 
         let scoreClass = '';
         let winText = '';
@@ -767,11 +767,19 @@ async function loadMatchHistory() {
         else if (cScore < eScore) { scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; }
         else { winText = 'НИЧЬЯ'; }
 
+        // ВЫПАДАЮЩИЙ СПИСОК С 3 КАРТАМИ
         const adminEdit = isAdmin ? `
             <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 10px;">
                 <input type="date" value="${match.match_date || ''}" onchange="updateMatchData(${match.id}, 'date', this.value)" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
                 <input type="text" value="${opponent}" onchange="updateMatchData(${match.id}, 'enemy_name', this.value)" placeholder="Имя врага" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
-                <input type="text" value="${match.map_name || ''}" onchange="updateMatchData(${match.id}, 'map_name', this.value)" placeholder="Название карты" style="background:var(--input-bg); color:#ff9800; border:1px solid var(--border-color); padding:5px; border-radius:4px; font-weight:bold;">
+                
+                <select onchange="updateMatchData(${match.id}, 'map_name', this.value)" style="background:var(--input-bg); color:#ff9800; border:1px solid var(--border-color); padding:5px; border-radius:4px; font-weight:bold; width:100%;">
+                    <option value="">-- Выберите карту --</option>
+                    <option value="Низина" ${match.map_name === 'Низина' ? 'selected' : ''}>Низина</option>
+                    <option value="Малая Бердовка" ${match.map_name === 'Малая Бердовка' ? 'selected' : ''}>Малая Бердовка</option>
+                    <option value="Хвойный" ${match.map_name === 'Хвойный' ? 'selected' : ''}>Хвойный</option>
+                </select>
+
                 <div style="display:flex; gap:5px;">
                     <input type="number" value="${cScore}" onchange="updateMatchData(${match.id}, 'clan_score', this.value)" placeholder="Наши очки" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
                     <input type="number" value="${eScore}" onchange="updateMatchData(${match.id}, 'enemy_points', this.value)" placeholder="Очки врага" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
@@ -824,9 +832,9 @@ function updateHistoryStats(rating, tierName, gears, wins, losses, draws) {
 async function addMatchHistory() {
     const date = prompt("Введите дату матча (ГГГГ-ММ-ДД):", new Date().toISOString().split('T')[0]);
     if (!date) return;
-    const mapName = prompt("Введите название карты (или оставьте пустым):", "");
     
-    const { error } = await supabaseClient.from('clan_matches').insert([{ match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг', map_name: mapName }]);
+    // При создании ставим карту "Низина" по умолчанию, чтобы не заставлять вводить её
+    const { error } = await supabaseClient.from('clan_matches').insert([{ match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг', map_name: 'Низина' }]);
     if (error) showToast('Ошибка: ' + error.message, 'error');
     else { showToast('Матч добавлен', 'success'); loadMatchHistory(); }
 }
@@ -1095,7 +1103,6 @@ async function loadAnalytics() {
         }
     }
 
-    // ==================== СТАТИСТИКА ПО КАРТАМ ====================
     const mapStatsBody = document.querySelector('#map-stats-table tbody');
     if (mapStatsBody) {
         const { data: matches } = await supabaseClient.from('clan_matches').select('*');
@@ -1118,7 +1125,6 @@ async function loadAnalytics() {
             mapStatsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных о картах</td></tr>';
         }
     }
-    // ================================================================
 }
 
 async function loadPlayerNotes(playerId) {
