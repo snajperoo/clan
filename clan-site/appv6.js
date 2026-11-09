@@ -498,6 +498,8 @@ async function updateAttendance(id, t, s) {
     if (s === 'Не отмечен') await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t);
     else await supabaseClient.from('attendance').upsert({ player_id: id, tournament_number: t, status: s }, { onConflict: 'player_id, tournament_number' });
     loadAttendance();
+    // Если вкладка пропусков открыта, обновляем и её
+    if (document.getElementById('tab-missed').classList.contains('active')) loadAllMissed();
 }
 
 function addTournament() { maxAttendanceStage += 3; loadAttendance(); }
@@ -573,10 +575,9 @@ async function updateMissedStatus(playerId, globalStage, newStatus) {
         await supabaseClient.from('attendance').upsert({ player_id: playerId, tournament_number: globalStage, status: newStatus }, { onConflict: 'player_id, tournament_number' }); 
     }
     
-    // Синхронизация
+    // Синхронизация: обновляем и пропуски, и посещаемость
     await loadAllMissed();
-    await loadAttendance(); 
-    await loadMatchStats();
+    if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
     showToast('Статус обновлен', 'success');
 }
 
@@ -681,7 +682,6 @@ function initCompareTab() {
 
 function renderComparison() {
     const selectEl = document.getElementById('compare-players');
-    const periodEl = document.getElementById('compare-period');
     const container = document.getElementById('compare-results');
     if (!selectEl || !selectEl.tomselect) return;
 
@@ -693,12 +693,6 @@ function renderComparison() {
     }
 
     const players = selectedIds.map(id => allPlayers.find(p => p.id == id)).filter(Boolean);
-
-    const formatCompare = (val1, val2, higherIsBetter = true) => {
-        if (val1 === val2) return { v1: val1, v2: val2 };
-        let is1Better = higherIsBetter ? (val1 > val2) : (val1 < val2);
-        return { v1: `<span class="${is1Better ? 'compare-winner' : 'compare-loser'}">${val1}</span>`, v2: `<span class="${!is1Better ? 'compare-winner' : 'compare-loser'}">${val2}</span>` };
-    };
 
     let thead = '<thead><tr><th>Характеристика</th>';
     players.forEach(p => { thead += `<th>${p.nickname} ${p.squad ? `<br><small style="color:var(--text-muted)">${p.squad}</small>` : ''}</th>`; });
@@ -976,6 +970,64 @@ async function addUpcomingMatch() {
 
     if (error) return showToast('Ошибка: ' + error.message, 'error');
     showToast('Турнир добавлен в календарь', 'success');
+    loadCalendar();
+}
+
+async function generateBulkCalendar() {
+    if (!isAdmin) return;
+    const startStr = document.getElementById('bulk-start').value;
+    const endStr = document.getElementById('bulk-end').value;
+    const time = document.getElementById('bulk-time').value;
+    const notes = document.getElementById('bulk-notes').value.trim();
+    
+    if (!startStr || !endStr) return showToast('Укажите даты начала и конца', 'error');
+    
+    const selectedDays = Array.from(document.querySelectorAll('.bulk-day:checked')).map(cb => parseInt(cb.value));
+    if (selectedDays.length === 0) return showToast('Выберите хотя бы один день недели', 'error');
+    
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerText = 'Генерация...';
+
+    let current = new Date(startStr);
+    const end = new Date(endStr);
+    const events = [];
+    
+    // Проходим по каждому дню в диапазоне
+    while (current <= end) {
+        if (selectedDays.includes(current.getDay())) {
+            // Формат YYYY-MM-DD
+            const year = current.getFullYear();
+            const month = String(current.getMonth() + 1).padStart(2, '0');
+            const day = String(current.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            
+            events.push({
+                match_date: dateStr,
+                match_time: time || null,
+                notes: notes
+            });
+        }
+        current.setDate(current.getDate() + 1);
+    }
+    
+    if (events.length === 0) {
+        btn.disabled = false;
+        btn.innerText = 'Сгенерировать события';
+        return showToast('В выбранном диапазоне нет подходящих дней', 'info');
+    }
+    
+    // Отправляем в базу пакетом
+    const { error } = await supabaseClient.from('clan_calendar').insert(events);
+    
+    btn.disabled = false;
+    btn.innerText = 'Сгенерировать события';
+    
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    
+    showToast(`Успешно добавлено ${events.length} событий!`, 'success');
+    document.getElementById('bulk-start').value = '';
+    document.getElementById('bulk-end').value = '';
     loadCalendar();
 }
 
