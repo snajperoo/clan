@@ -362,8 +362,10 @@
         <!-- КАЛЕНДАРЬ -->
         <div id="tab-calendar" class="tab-content">
             <div class="stage-header"><h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">📅 Календарь турниров</h2></div>
+            
+            <!-- Одиночное добавление -->
             <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--border-color); display:none;">
-                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать турнир</h3>
+                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать один турнир</h3>
                 <div class="form-grid-3">
                     <div class="form-group"><label>Дата турнира</label><input type="date" id="cal-date"></div>
                     <div class="form-group"><label>Время начала</label><input type="time" id="cal-time"></div>
@@ -371,10 +373,34 @@
                 </div>
                 <div class="form-grid-2">
                     <div class="form-group"><label>Заметки</label><input type="text" id="cal-notes" placeholder="Сбор в 19:30"></div>
-                    <div class="form-group"><label>Номер этапа (опционально)</label><input type="number" id="cal-stage" placeholder="Оставьте пустым для всех 3-х"><small style="color:var(--accent-color); display:block; margin-top:5px; font-size:0.8em;">Если оставить пустым, создадутся 3 этапа на выбранную дату.</small></div>
+                    <div class="form-group"><label>Номер этапа (опционально)</label><input type="number" id="cal-stage" placeholder="Оставьте пустым для всех 3-х"></div>
                 </div>
                 <button class="btn" onclick="addUpcomingMatch()" style="margin-top:10px;">Добавить в календарь</button>
             </div>
+
+            <!-- МАССОВОЕ ЗАПОЛНЕНИЕ -->
+            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--accent-color); display:none;">
+                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">⚡ Массовое заполнение сезона</h3>
+                <div class="form-grid-2">
+                    <div class="form-group"><label>Дата начала</label><input type="date" id="bulk-start"></div>
+                    <div class="form-group"><label>Дата конца</label><input type="date" id="bulk-end"></div>
+                </div>
+                <div class="form-group" style="display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">
+                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="1"> Пн</label>
+                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="2"> Вт</label>
+                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="3"> Ср</label>
+                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="4" checked> Чт</label>
+                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="5" checked> Пт</label>
+                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="6" checked> Сб</label>
+                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="0"> Вс</label>
+                </div>
+                <div class="form-grid-2">
+                    <div class="form-group"><label>Время (для всех)</label><input type="time" id="bulk-time" value="19:00"></div>
+                    <div class="form-group"><label>Заметки (для всех)</label><input type="text" id="bulk-notes" placeholder="Сезон 2"></div>
+                </div>
+                <button class="btn" onclick="generateBulkCalendar()" style="margin-top:10px; width:100%; background:var(--accent-color); color:#000;">Сгенерировать события</button>
+            </div>
+
             <div id="calendar-list"></div>
         </div>
 
