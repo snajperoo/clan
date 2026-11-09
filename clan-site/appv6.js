@@ -15,7 +15,7 @@ let myChart = null;
 const ADMIN_SECRET_CODE = 'ADMIN123';
 const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
 
-// Конфиг отрядов
+// Базовый конфиг отрядов (если в базе еще ничего нет)
 let SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
     { name: '2 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -25,15 +25,15 @@ let SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// Загрузка кастомных названий отрядов
-const savedSquads = localStorage.getItem('custom_squads');
-if (savedSquads) {
-    try {
-        const parsed = JSON.parse(savedSquads);
+// Функция загрузки названий из БД
+async function loadSquadConfig() {
+    const { data } = await supabaseClient.from('clan_settings').select('value').eq('key', 'squads').single();
+    if (data && data.value) {
+        const parsed = data.value;
         if (Array.isArray(parsed) && parsed.length === 6) {
             SQUADS_CONFIG.forEach((sq, i) => { sq.name = parsed[i]; });
         }
-    } catch(e) { console.error('Ошибка чтения названий отрядов'); }
+    }
 }
 
 const TIER_SETTINGS = [
@@ -53,15 +53,11 @@ function getTierData(rating) {
 
 // ==================== АВТОСКРОЛЛ ПРИ ПЕРЕТАСКИВАНИИ ====================
 document.addEventListener('dragover', function(e) {
-    const scrollThreshold = 100; // Расстояние от края экрана
-    const scrollSpeed = 20; // Скорость прокрутки
-    
-    // Если тянем вверх
+    const scrollThreshold = 100;
+    const scrollSpeed = 20;
     if (e.clientY < scrollThreshold) {
         window.scrollBy(0, -scrollSpeed);
-    }
-    // Если тянем вниз
-    else if (window.innerHeight - e.clientY < scrollThreshold) {
+    } else if (window.innerHeight - e.clientY < scrollThreshold) {
         window.scrollBy(0, scrollSpeed);
     }
 });
@@ -72,9 +68,6 @@ function setupRealtimeSync() {
     supabaseClient
         .channel('schema-db-changes')
         .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
-            // Если изменились данные в базе, мгновенно обновляем интерфейс
-            console.log('Изменение в БД:', payload);
-            
             loadAllData().then(() => {
                 if (document.getElementById('tab-roster').classList.contains('active')) initDragAndDrop();
                 if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
@@ -208,12 +201,14 @@ async function saveSquadNames() {
     let changed = false;
     const changes = [];
     const uniqueNames = new Set();
+    const newNamesArray = [];
 
     for (let i = 0; i < SQUADS_CONFIG.length; i++) {
         const inputVal = document.getElementById(`squad-name-input-${i}`).value.trim();
         if (!inputVal) return showToast('Название отряда не может быть пустым', 'error');
         if (uniqueNames.has(inputVal)) return showToast('Названия отрядов не должны совпадать', 'error');
         uniqueNames.add(inputVal);
+        newNamesArray.push(inputVal);
         
         if (inputVal !== SQUADS_CONFIG[i].name) {
             changes.push({ old: SQUADS_CONFIG[i].name, new: inputVal });
@@ -231,15 +226,18 @@ async function saveSquadNames() {
     showToast('Сохранение...', 'info');
 
     try {
-        // Обновляем БД
-        for (const ch of changes) {
-            const { error } = await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
-            if (error) throw error;
-        }
-        // Сохраняем локально
-        localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
+        // 1. Сохраняем названия в базу данных (глобально для всех)
+        await supabaseClient.from('clan_settings').upsert({ key: 'squads', value: newNamesArray });
         
-        // Обновляем интерфейс без перезагрузки
+        // 2. Обновляем игроков в базе
+        for (const ch of changes) {
+            await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
+        }
+        
+        // 3. Сохраняем локально на всякий случай
+        localStorage.setItem('custom_squads', JSON.stringify(newNamesArray));
+        
+        // 4. Обновляем интерфейс
         await loadAllData();
         initDragAndDrop();
         showToast('Названия отрядов обновлены!', 'success');
@@ -250,6 +248,8 @@ async function saveSquadNames() {
 // =============================================================
 
 async function loadAllData() {
+    // Загружаем названия отрядов ПЕРЕД тем, как строить интерфейс
+    await loadSquadConfig();
     populateProfileDropdowns();
     
     const { data: players } = await supabaseClient.from('players').select('*').order('kd', { ascending: false });
@@ -592,25 +592,17 @@ async function handleDrop(event, slot) {
     if (!id) return; 
 
     try {
-        // 1. Убираем старого игрока из слота, если он там был
         if (ex && ex !== id) {
             await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', ex);
         }
-        
-        // 2. Очищаем текущий отряд перетаскиваемого игрока
         await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id);
-        
-        // 3. Записываем в новый отряд и роль
         const { error } = await supabaseClient.from('players').update({ squad: sq, role: role }).eq('id', id);
         if (error) throw error;
 
-        // Обновляем локальные данные (чтобы не ждать перезагрузки)
         const p = allPlayers.find(x => x.id === id);
         if (p) { p.squad = sq; p.role = role; }
 
         showToast('Игрок перемещен', 'success');
-        
-        // Обновляем интерфейс
         await loadAllData(); 
         initDragAndDrop();
     } catch (err) {
