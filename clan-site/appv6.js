@@ -486,63 +486,18 @@ async function removeFromSquad(id) {
     await loadAllData(); initDragAndDrop();
 }
 
+// ==================== ВОЗВРАЩЕНА СТАРАЯ МЕХАНИКА ПОСЕЩАЕМОСТИ ====================
 async function loadAttendance() {
     const { data: p } = await supabaseClient.from('players').select('*'), { data: a } = await supabaseClient.from('attendance').select('*');
-    const { data: calEvents } = await supabaseClient.from('clan_calendar').select('*').order('tournament_number', { ascending: true }).order('stage_number', { ascending: true });
-    
-    if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); } 
-    if (a) allAttendance = a;
-    
-    let max = maxAttendanceStage; 
-    if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
+    if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); } if (a) allAttendance = a;
+    let max = maxAttendanceStage; if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
     maxAttendanceStage = max;
-    
-    let maxCalTourney = 0;
-    if (calEvents && calEvents.length > 0) {
-        maxCalTourney = Math.max(...calEvents.map(e => e.tournament_number || 0));
-    }
-    
-    // ИСПРАВЛЕНО: finalMax объявлен в области видимости всей функции
-    const finalMax = Math.max(maxAttendanceStage, maxCalTourney * 3);
-    
-    const s = document.getElementById('modal-stage'); 
-    if (s) { 
-        s.innerHTML = ''; 
-        
-        let nextStageToSelect = maxAttendanceStage + 1;
-        if (calEvents && calEvents.length > 0) {
-            const upcoming = calEvents.find(e => {
-                 const globalStg = (e.tournament_number - 1) * 3 + e.stage_number;
-                 return globalStg > maxAttendanceStage;
-            });
-            if (upcoming) nextStageToSelect = (upcoming.tournament_number - 1) * 3 + upcoming.stage_number;
-        }
-        
-        for (let i = 1; i <= finalMax; i++) { 
-            const o = document.createElement('option'); 
-            o.value = i; 
-            
-            const tourneyNum = Math.ceil(i / 3);
-            const stageInTourney = i % 3 === 0 ? 3 : i % 3;
-            const calEvent = (calEvents || []).find(e => e.tournament_number === tourneyNum && e.stage_number === stageInTourney);
-            
-            let label = `Этап ${i}`;
-            if (calEvent && calEvent.match_date) {
-                const dateStr = new Date(calEvent.match_date).toLocaleDateString('ru-RU');
-                label += ` (Турнир ${tourneyNum}, Этап ${stageInTourney} - ${dateStr})`;
-            } else {
-                label += ` (Турнир ${tourneyNum}, Этап ${stageInTourney})`;
-            }
-            o.textContent = label; 
-            if (i === nextStageToSelect) o.selected = true;
-            s.appendChild(o); 
-        } 
-    }
+    const s = document.getElementById('modal-stage'); if (s) { s.innerHTML = ''; for (let i = 1; i <= max; i++) { const o = document.createElement('option'); o.value = i; o.textContent = `Этап ${i}`; s.appendChild(o); } }
     
     const th = document.getElementById('attendance-thead'); if (!th) return;
-    let h = '<tr class="day-brackets-row"><th></th>', tC = Math.ceil(finalMax / 3);
-    for (let t = 0; t < tC; t++) { const st = Math.min(3, finalMax - t * 3); h += `<th colspan="${st}" style="border: 2px solid var(--accent-color); border-bottom: none; border-radius: var(--radius) var(--radius) 0 0; color: var(--accent-color); font-weight: bold; text-align: center;">ТУРНИР ${t + 1}</th>`; }
-    h += '</tr><tr><th>Боец</th>'; for (let i = 1; i <= finalMax; i++) h += `<th>ЭТАП ${i}</th>`; th.innerHTML = h + '</tr>';
+    let h = '<tr class="day-brackets-row"><th></th>', tC = Math.ceil(max / 3);
+    for (let t = 0; t < tC; t++) { const st = Math.min(3, max - t * 3); h += `<th colspan="${st}" style="border: 2px solid var(--accent-color); border-bottom: none; border-radius: var(--radius) var(--radius) 0 0; color: var(--accent-color); font-weight: bold; text-align: center;">ТУРНИР ${t + 1}</th>`; }
+    h += '</tr><tr><th>Боец</th>'; for (let i = 1; i <= max; i++) h += `<th>ЭТАП ${i}</th>`; th.innerHTML = h + '</tr>';
     
     const tb = document.getElementById('attendance-table-body'); if (!tb) return; tb.innerHTML = '';
     const searchInput = document.getElementById('attendance-search');
@@ -551,7 +506,7 @@ async function loadAttendance() {
 
     filteredPlayers.forEach(p => {
         let row = `<tr><td>${p.nickname}</td>`;
-        for (let t = 1; t <= finalMax; t++) {
+        for (let t = 1; t <= max; t++) {
             const r = allAttendance.find(a => a.player_id === p.id && a.tournament_number === t); const st = r ? r.status : 'Не отмечен';
             let c = st === 'Пришел' ? 'status-1' : (st === 'Не пришел' ? 'status-2' : (st === 'Отгул' ? 'status-3' : ''));
             row += `<td><select class="${c}" ${!isAdmin ? 'disabled' : ''} onchange="updateAttendance(${p.id}, ${t}, this.value)"><option value="Не отмечен" ${st === 'Не отмечен' ? 'selected' : ''}>-</option><option value="Пришел" ${st === 'Пришел' ? 'selected' : ''}>Пришел</option><option value="Не пришел" ${st === 'Не пришел' ? 'selected' : ''}>Не пришел</option><option value="Отгул" ${st === 'Отгул' ? 'selected' : ''}>Отгул</option></select></td>`;
@@ -559,6 +514,7 @@ async function loadAttendance() {
         tb.innerHTML += row + '</tr>';
     });
 }
+// ===============================================================================
 
 async function updateAttendance(id, t, s) {
     if (!isAdmin) return;
@@ -646,21 +602,14 @@ async function updateMissedStatus(playerId, globalStage, newStatus) {
     showToast('Статус обновлен', 'success');
 }
 
+// ==================== ВОЗВРАЩЕНА СТАРАЯ МЕХАНИКА СТАТИСТИКИ ====================
 async function loadMatchStats() {
     const { data: p } = await supabaseClient.from('players').select('*'), { data: s } = await supabaseClient.from('match_stats').select('*');
-    const { data: calEvents } = await supabaseClient.from('clan_calendar').select('*');
-    
     if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); }
     
     const th = document.getElementById('stats-thead'); if (!th) return;
     let max = maxAttendanceStage; 
     if (s && s.length > 0) { const m = Math.max(...s.map(x => x.stage_number)); if (m > max) max = m; }
-    
-    let maxCalTourney = 0;
-    if (calEvents && calEvents.length > 0) {
-        maxCalTourney = Math.max(...calEvents.map(e => e.tournament_number || 0));
-    }
-    max = Math.max(max, maxCalTourney * 3);
     
     let h = '<tr><th rowspan="2" style="vertical-align: middle;">Боец</th>';
     let tC = Math.ceil(max / 3);
@@ -689,6 +638,7 @@ async function loadMatchStats() {
         tb.innerHTML += row + '</tr>';
     });
 }
+// ===============================================================================
 
 async function updateMatchStat(playerId, stageNum, field, value) {
     if (!isAdmin) return;
