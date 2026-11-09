@@ -15,7 +15,8 @@ let myChart = null;
 const ADMIN_SECRET_CODE = 'ADMIN123';
 const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
 
-const SQUADS_CONFIG = [
+// Конфиг отрядов вынесен в let для возможности редактирования
+let SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
     { name: '2 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
     { name: '3 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -23,6 +24,17 @@ const SQUADS_CONFIG = [
     { name: '5 Отряд поддержки', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
+
+// Загрузка кастомных названий отрядов
+const savedSquads = localStorage.getItem('custom_squads');
+if (savedSquads) {
+    try {
+        const parsed = JSON.parse(savedSquads);
+        if (Array.isArray(parsed) && parsed.length === 6) {
+            SQUADS_CONFIG.forEach((sq, i) => { sq.name = parsed[i]; });
+        }
+    } catch(e) { console.error('Ошибка чтения названий отрядов'); }
+}
 
 const TIER_SETTINGS = [
     { name: 'E', minRating: 0, winGears: 1250, lossGears: 250 },
@@ -134,6 +146,35 @@ function populateProfileDropdowns() {
     SQUADS_CONFIG.forEach(sq => { squadSelect.innerHTML += `<option value="${sq.name}">${sq.name}</option>`; });
     roleSelect.innerHTML = '<option value="">-- Без роли --</option>';
     SQUADS_CONFIG[0].roles.forEach(r => { roleSelect.innerHTML += `<option value="${r}">${r}</option>`; });
+}
+
+// РЕДАКТИРОВАНИЕ НАЗВАНИЙ ОТРЯДОВ
+async function editSquadNames() {
+    if (!isAdmin) return;
+    const newNames = [];
+    let hasChanges = false;
+    
+    for (let i=0; i<6; i++) {
+        const oldName = SQUADS_CONFIG[i].name;
+        const input = prompt(`Название для отряда ${i+1}:`, oldName);
+        
+        if (input !== null && input.trim() !== '' && input.trim() !== oldName) {
+            newNames.push({ old: oldName, new: input.trim() });
+            SQUADS_CONFIG[i].name = input.trim();
+            hasChanges = true;
+        }
+    }
+    
+    if (hasChanges) {
+        showToast('Обновляем базу данных...', 'info');
+        for (const item of newNames) {
+            await supabaseClient.from('players').update({ squad: item.new }).eq('squad', item.old);
+        }
+        localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
+        await loadAllData();
+        initDragAndDrop();
+        showToast('Названия отрядов обновлены!', 'success');
+    }
 }
 
 async function loadAllData() {
@@ -486,7 +527,6 @@ async function removeFromSquad(id) {
     await loadAllData(); initDragAndDrop();
 }
 
-// ==================== ВОЗВРАЩЕНА СТАРАЯ МЕХАНИКА ПОСЕЩАЕМОСТИ ====================
 async function loadAttendance() {
     const { data: p } = await supabaseClient.from('players').select('*'), { data: a } = await supabaseClient.from('attendance').select('*');
     if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); } if (a) allAttendance = a;
@@ -514,12 +554,33 @@ async function loadAttendance() {
         tb.innerHTML += row + '</tr>';
     });
 }
-// ===============================================================================
 
+// ОБНОВЛЕННАЯ ФУНКЦИЯ СОХРАНЕНИЯ СТАТУСА (С ЗАЩИТОЙ ОТ СБРОСА)
 async function updateAttendance(id, t, s) {
     if (!isAdmin) return;
-    if (s === 'Не отмечен') await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t);
-    else await supabaseClient.from('attendance').upsert({ player_id: id, tournament_number: t, status: s }, { onConflict: 'player_id, tournament_number' });
+    
+    if (s === 'Не отмечен') {
+        await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t);
+    } else {
+        // Пытаемся обновить (upsert)
+        const { error } = await supabaseClient.from('attendance').upsert({ player_id: id, tournament_number: t, status: s }, { onConflict: 'player_id, tournament_number' });
+        
+        // Если ошибка (например, нет constraint), делаем вручную
+        if (error) {
+            console.error("Upsert failed, trying manual update", error);
+            const { data: existing } = await supabaseClient.from('attendance').select('id').eq('player_id', id).eq('tournament_number', t).single();
+            if (existing) {
+                await supabaseClient.from('attendance').update({ status: s }).eq('id', existing.id);
+            } else {
+                await supabaseClient.from('attendance').insert({ player_id: id, tournament_number: t, status: s });
+            }
+        }
+    }
+    
+    // Обновляем данные локально, чтобы UI не мигал
+    const localRec = allAttendance.find(a => a.player_id === id && a.tournament_number === t);
+    if (localRec) localRec.status = s;
+    
     loadAttendance();
     if (document.getElementById('tab-missed').classList.contains('active')) loadAllMissed();
 }
@@ -602,7 +663,6 @@ async function updateMissedStatus(playerId, globalStage, newStatus) {
     showToast('Статус обновлен', 'success');
 }
 
-// ==================== ВОЗВРАЩЕНА СТАРАЯ МЕХАНИКА СТАТИСТИКИ ====================
 async function loadMatchStats() {
     const { data: p } = await supabaseClient.from('players').select('*'), { data: s } = await supabaseClient.from('match_stats').select('*');
     if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); }
@@ -638,7 +698,6 @@ async function loadMatchStats() {
         tb.innerHTML += row + '</tr>';
     });
 }
-// ===============================================================================
 
 async function updateMatchStat(playerId, stageNum, field, value) {
     if (!isAdmin) return;
@@ -811,6 +870,19 @@ async function loadMatchHistory() {
 
     timeline.innerHTML = '';
     const reversedMatches = [...filteredMatches].reverse();
+    let simRating = 1000;
+    let simWins = 0, simLosses = 0, simDraws = 0;
+    let simGears = 0;
+    
+    // Для правильного отображения гильз восстанавливаем историю с начала
+    [...filteredMatches].forEach(m => {
+        const cS = m.clan_score || 0;
+        const eS = m.enemy_points || 0;
+        if (cS > eS) { simGears += getTierData(simRating).winGears; simRating += 50; }
+        else if (cS < eS) { if (cS >= (eS * 0.2)) simGears += getTierData(simRating).lossGears; simRating -= 50; }
+    });
+
+    let currentCalcRating = 1000;
     
     reversedMatches.forEach((match, index) => {
         const isLeft = index % 2 === 0;
@@ -822,8 +894,19 @@ async function loadMatchHistory() {
 
         let scoreClass = '';
         let winText = '';
-        if (cScore > eScore) { scoreClass = 'score-win'; winText = 'ПОБЕДА'; }
-        else if (cScore < eScore) { scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; }
+        let gearsEarned = 0;
+        const tierAtMatch = getTierData(currentCalcRating);
+
+        if (cScore > eScore) { 
+            scoreClass = 'score-win'; winText = 'ПОБЕДА'; 
+            gearsEarned = tierAtMatch.winGears;
+            currentCalcRating += 50;
+        }
+        else if (cScore < eScore) { 
+            scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; 
+            if (cScore >= (eScore * 0.2)) gearsEarned = tierAtMatch.lossGears;
+            currentCalcRating -= 50;
+        }
         else { winText = 'НИЧЬЯ'; }
 
         const adminEdit = isAdmin ? `
@@ -848,6 +931,7 @@ async function loadMatchHistory() {
 
         const stageBadge = match.stage_number ? `<div style="font-size:0.8em; color:var(--accent-color); margin-bottom:5px;">Этап ${match.stage_number}</div>` : '';
         const mapBadge = `<div style="font-size:0.85em; color:#9cdcfe; margin-bottom:5px;">🗺️ ${mapName}</div>`;
+        const gearsBadge = gearsEarned > 0 ? `<div style="color:#9cdcfe; font-size:0.9em; margin-top:5px; font-weight:bold;">+ ${gearsEarned} гильз</div>` : '';
 
         timeline.innerHTML += `
             <div class="timeline-item ${isLeft ? 'left' : 'right'}">
@@ -858,6 +942,7 @@ async function loadMatchHistory() {
                     <div class="timeline-opponent">vs <strong>${opponent}</strong></div>
                     <div class="timeline-score ${scoreClass}">${cScore} : ${eScore}</div>
                     <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${winText}</div>
+                    ${gearsBadge}
                     ${adminEdit}
                 </div>
             </div>
