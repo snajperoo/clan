@@ -7,6 +7,10 @@ let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allN
 let currentEditId = null, maxAttendanceStage = 3, maxTournament = 4, isAdmin = false, currentPhotoFile = null;
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
 
+// Сезоны
+let currentSeason = 'all';
+const TOURNAMENTS_PER_SEASON = 12;
+
 let myChart = null;
 
 const ADMIN_SECRET_CODE = 'ADMIN123';
@@ -76,6 +80,26 @@ function checkLogin() {
 }
 
 function logout() { location.reload(); }
+
+// ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ СЕЗОНОВ
+function switchViewingSeason(val) {
+    currentSeason = val;
+    showToast(`Выбран сезон: ${val === 'all' ? 'Все время' : val}`, 'info');
+    
+    // Обновляем данные на активных вкладках
+    if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
+    if (document.getElementById('tab-calendar').classList.contains('active')) loadCalendar();
+    if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
+    if (document.getElementById('tab-stats').classList.contains('active')) loadMatchStats();
+}
+
+function filterBySeason(tournamentNum) {
+    if (currentSeason === 'all') return true;
+    const seasonInt = parseInt(currentSeason);
+    const minT = (seasonInt - 1) * TOURNAMENTS_PER_SEASON + 1;
+    const maxT = seasonInt * TOURNAMENTS_PER_SEASON;
+    return tournamentNum >= minT && tournamentNum <= maxT;
+}
 
 function openTab(evt, tabName) {
     document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
@@ -498,7 +522,6 @@ async function updateAttendance(id, t, s) {
     if (s === 'Не отмечен') await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t);
     else await supabaseClient.from('attendance').upsert({ player_id: id, tournament_number: t, status: s }, { onConflict: 'player_id, tournament_number' });
     loadAttendance();
-    // Синхронизация
     if (document.getElementById('tab-missed').classList.contains('active')) loadAllMissed();
 }
 
@@ -575,7 +598,6 @@ async function updateMissedStatus(playerId, globalStage, newStatus) {
         await supabaseClient.from('attendance').upsert({ player_id: playerId, tournament_number: globalStage, status: newStatus }, { onConflict: 'player_id, tournament_number' }); 
     }
     
-    // Синхронизация
     await loadAllMissed();
     if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
     showToast('Статус обновлен', 'success');
@@ -760,7 +782,10 @@ async function loadMatchHistory() {
         return;
     }
 
-    matches.forEach(match => {
+    // Фильтруем матчи по выбранному сезону
+    const filteredMatches = matches.filter(m => filterBySeason(Math.ceil((m.stage_number || 0) / 3)));
+
+    filteredMatches.forEach(match => {
         const cScore = match.clan_score || 0;
         const eScore = match.enemy_points || 0;
         
@@ -785,7 +810,7 @@ async function loadMatchHistory() {
     updateHistoryStats(totalRating, finalTier.name, totalGears, wins, losses, draws);
 
     timeline.innerHTML = '';
-    const reversedMatches = [...matches].reverse();
+    const reversedMatches = [...filteredMatches].reverse();
     
     reversedMatches.forEach((match, index) => {
         const isLeft = index % 2 === 0;
@@ -925,15 +950,29 @@ async function loadCalendar() {
     if (!list) return;
     list.innerHTML = 'Загрузка...';
 
+    // Получаем данные из БД
     const { data: events } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('stage_number', { ascending: true });
+    const { data: matches } = await supabaseClient.from('clan_matches').select('stage_number');
     
-    if (!events || events.length === 0) {
-        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет запланированных турниров</div>';
+    // Вычисляем максимальный турнир для подсказки
+    let maxStage = 0;
+    if (matches && matches.length > 0) { maxStage = Math.max(...matches.map(m => m.stage_number || 0)); }
+    const maxTourney = Math.ceil(maxStage / 3) || 0;
+    
+    // Заполняем поле с автоинкрементом
+    const startTourneyInput = document.getElementById('bulk-start-tournament');
+    if (startTourneyInput) startTourneyInput.value = maxTourney + 1;
+
+    // Фильтруем по сезону
+    const filteredEvents = (events || []).filter(e => filterBySeason(e.tournament_number || 0));
+
+    if (filteredEvents.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет запланированных турниров в этом сезоне</div>';
         return;
     }
 
     list.innerHTML = '';
-    events.forEach(e => {
+    filteredEvents.forEach(e => {
         const dateStr = e.match_date ? new Date(e.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
         const timeStr = e.match_time ? e.match_time.slice(0, 5) : '';
         
@@ -980,6 +1019,8 @@ async function generateBulkCalendar() {
     const time = document.getElementById('bulk-time').value;
     const notes = document.getElementById('bulk-notes').value.trim();
     
+    let startTourney = parseInt(document.getElementById('bulk-start-tournament').value) || 1;
+    
     if (!startStr || !endStr) return showToast('Укажите даты начала и конца', 'error');
     
     const selectedDays = Array.from(document.querySelectorAll('.bulk-day:checked')).map(cb => parseInt(cb.value));
@@ -992,6 +1033,7 @@ async function generateBulkCalendar() {
     let current = new Date(startStr);
     const end = new Date(endStr);
     const events = [];
+    let currentTourney = startTourney;
     
     // Проходим по каждому дню в диапазоне
     while (current <= end) {
@@ -1002,15 +1044,17 @@ async function generateBulkCalendar() {
             const day = String(current.getDate()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}`;
             
-            // Генерируем 3 этапа на каждый выбранный день
+            // Генерируем 3 этапа на каждый выбранный день для текущего турнира
             for (let stageNum = 1; stageNum <= 3; stageNum++) {
                 events.push({
                     match_date: dateStr,
                     match_time: time || null,
+                    tournament_number: currentTourney,
                     stage_number: stageNum,
                     notes: notes
                 });
             }
+            currentTourney++; // Увеличиваем номер турнира после полного заполнения дня (3 этапа)
         }
         current.setDate(current.getDate() + 1);
     }
@@ -1029,7 +1073,7 @@ async function generateBulkCalendar() {
     
     if (error) return showToast('Ошибка: ' + error.message, 'error');
     
-    showToast(`Успешно добавлено ${events.length} событий (${events.length / 3} дней)!`, 'success');
+    showToast(`Успешно добавлено ${events.length / 3} турниров (${events.length} этапов)!`, 'success');
     document.getElementById('bulk-start').value = '';
     document.getElementById('bulk-end').value = '';
     loadCalendar();
@@ -1265,8 +1309,10 @@ async function loadAnalytics() {
     if (mapStatsBody) {
         const { data: matches } = await supabaseClient.from('clan_matches').select('*');
         if (matches && matches.length > 0) {
+            // Фильтруем по сезону
+            const filteredMatches = matches.filter(m => filterBySeason(Math.ceil((m.stage_number || 0) / 3)));
             const mapData = {};
-            matches.forEach(m => {
+            filteredMatches.forEach(m => {
                 const map = m.map_name ? m.map_name.trim() : 'Неизвестная';
                 if (!mapData[map]) mapData[map] = { games: 0, wins: 0 };
                 mapData[map].games++;
