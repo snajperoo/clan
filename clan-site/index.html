@@ -1,566 +1,1671 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Клановый Портал | STALZONE</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
-    
-    <script src="appv6.js" defer></script>
-    <style>
-        :root { --bg-color: #0d0f0d; --bg-gradient: radial-gradient(circle at top left, #1a201a, #0d0f0d); --text-color: #d1d5d1; --panel-bg: rgba(25, 30, 25, 0.85); --card-bg: rgba(35, 40, 35, 0.9); --border-color: #2a3a2a; --accent-color: #ff9800; --accent-glow: rgba(255, 152, 0, 0.3); --success-color: #4caf50; --danger-color: #e53935; --text-muted: #7a857a; --input-bg: #111411; --radius: 4px; }
-        img { max-width: 100%; height: auto; }
-        .ts-wrapper .ts-control { background-color: var(--input-bg) !important; border: 1px solid var(--border-color) !important; color: var(--text-color) !important; border-radius: var(--radius) !important; padding: 10px 15px !important; box-shadow: none !important; font-family: 'Courier New', monospace; }
-        .ts-wrapper.focus .ts-control { border-color: var(--accent-color) !important; box-shadow: 0 0 10px var(--accent-glow) !important; }
-        .ts-dropdown { background-color: var(--panel-bg) !important; border: 1px solid var(--border-color) !important; color: var(--text-color) !important; border-radius: var(--radius) !important; backdrop-filter: blur(15px); font-family: 'Courier New', monospace; }
-        .ts-dropdown .option { padding: 10px 15px; color: var(--text-color); }
-        .ts-dropdown .option.active { background-color: rgba(255, 152, 0, 0.2) !important; color: var(--accent-color) !important; }
-        .ts-dropdown .option:hover { background-color: rgba(255,255,255,0.05); }
-        .ts-control > input { color: var(--text-color) !important; }
-        * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-color); margin: 0; padding: 0; transition: 0.3s; min-height: 100vh; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-color); }
-        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: var(--radius); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--accent-color); }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; padding-bottom: 20px; border-bottom: 2px dashed var(--border-color); }
-        h1 { margin: 0; color: var(--accent-color); font-size: 2.2em; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--accent-glow); font-weight: 900; }
-        .theme-toggle { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 10px 20px; border-radius: var(--radius); cursor: pointer; font-weight: bold; text-transform: uppercase; transition: all 0.2s ease; }
-        .theme-toggle:hover { background: var(--border-color); border-color: var(--accent-color); }
-        .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
-        .tab-btn { background-color: var(--panel-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 10px 20px; border-radius: var(--radius); cursor: pointer; font-size: 1em; font-weight: bold; text-transform: uppercase; transition: all 0.2s ease; }
-        .tab-btn:hover { border-color: var(--accent-color); background: rgba(255,152,0,0.1); }
-        .tab-btn.active { background: var(--accent-color); color: #000; border-color: var(--accent-color); box-shadow: 0 0 10px var(--accent-glow); }
-        .tab-content { display: none; background-color: var(--panel-bg); border-radius: var(--radius); padding: 25px; border: 1px solid var(--border-color); box-shadow: 0 5px 20px rgba(0,0,0,0.5); animation: fadeIn 0.3s ease; }
-        .tab-content.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 12px 15px; text-align: left; font-size: 0.95em; border-bottom: 1px solid var(--border-color); font-family: 'Courier New', monospace; }
-        th { background-color: #111411; color: var(--accent-color); font-weight: bold; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 2px solid var(--accent-color); }
-        tr { transition: background 0.2s; }
-        tr:hover { background-color: rgba(255, 152, 0, 0.05); }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 0.85em; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-        .form-group input:not([type="checkbox"]):not([type="time"]):not([type="date"]), .form-group select { width: 100%; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 1em; font-family: 'Courier New', monospace; transition: all 0.2s ease; }
-        .form-group input[type="date"], .form-group input[type="time"] { width: 100%; padding: 9px 12px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 1em; font-family: 'Courier New', monospace; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 8px var(--accent-glow); }
-        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-top: 25px; }
-        .checkbox-group input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent-color); }
-        .checkbox-group label { margin: 0; cursor: pointer; color: var(--text-color); font-size: 1em; font-weight: bold; text-transform: uppercase; }
-        .btn { padding: 10px 20px; border-radius: var(--radius); border: none; background: var(--success-color); color: #000; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: all 0.2s ease; font-family: 'Courier New', monospace; }
-        .btn:hover { background: #66bb6a; box-shadow: 0 0 10px rgba(76, 175, 80, 0.4); }
-        .btn-danger { background: var(--danger-color); color: #fff; }
-        .btn-danger:hover { background: #ef5350; box-shadow: 0 0 10px rgba(229, 57, 53, 0.4); }
-        .profile-layout { display: flex; gap: 20px; height: 80vh; }
-        .player-list-panel { width: 320px; background: var(--card-bg); border-radius: var(--radius); display: flex; flex-direction: column; border: 1px solid var(--border-color); overflow: hidden; }
-        .player-list-header { padding: 15px; background: #111411; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .player-list { flex: 1; overflow-y: auto; padding: 10px; }
-        .player-item { padding: 12px; margin-bottom: 8px; background: #1a1e1a; border-radius: var(--radius); cursor: pointer; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; font-family: 'Courier New', monospace; }
-        .player-item:hover, .player-item.active { border-color: var(--accent-color); background: rgba(255, 152, 0, 0.1); transform: translateX(3px); }
-        .profile-form-panel { flex: 1; background: var(--card-bg); border-radius: var(--radius); padding: 25px; border: 1px solid var(--border-color); overflow-y: auto; }
-        .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 15px; }
-        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .form-section-title { grid-column: 1 / -1; color: var(--accent-color); margin: 15px 0 10px 0; border-bottom: 2px dashed var(--border-color); padding-bottom: 10px; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; }
-        .roster-layout { display: flex; gap: 20px; align-items: flex-start; }
-        .roster-board { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; align-items: start; }
-        .squad-card { background: var(--card-bg); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border-color); height: max-content; display: flex; flex-direction: column; }
-        .squad-title { text-align: center; color: var(--accent-color); font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--border-color); text-transform: uppercase; letter-spacing: 1px; }
-        .role-slot { display: flex; justify-content: space-between; align-items: center; padding: 10px; margin-bottom: 5px; border-radius: var(--radius); background: #111411; border: 1px solid var(--border-color); min-height: 45px; transition: 0.2s; }
-        .role-slot.drag-over { border-color: var(--success-color); background: rgba(76, 175, 80, 0.1); transform: scale(1.02); }
-        .role-slot span { font-size: 0.95em; font-weight: bold; word-break: break-word; font-family: 'Courier New', monospace; }
-        .free-players-panel { width: 300px; background: var(--card-bg); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border-color); position: sticky; top: 20px; min-height: 200px; }
-        .free-player-item { background: #111411; padding: 10px; border-radius: var(--radius); margin-bottom: 8px; cursor: grab; border: 1px solid var(--border-color); display: flex; justify-content: space-between; transition: 0.2s; font-family: 'Courier New', monospace; font-weight: bold;}
-        .free-player-item:hover { border-color: var(--accent-color); }
-        .free-player-item.dragging { opacity: 0.5; transform: scale(0.95); }
-        .attendance-table, .stats-table { width: 100%; border-collapse: collapse; background: transparent; }
-        .attendance-table th, .attendance-table td, .stats-table th, .stats-table td { padding: 8px; text-align: center; font-size: 0.85em; border: 1px solid var(--border-color); background: var(--card-bg); font-family: 'Courier New', monospace; }
-        .attendance-table th, .stats-table th { background: #111411; color: var(--accent-color); }
-        .attendance-table tr td:first-child, .stats-table tr td:first-child { text-align: left; font-weight: bold; }
-        .attendance-table select { width: 100%; padding: 4px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius); font-family: 'Courier New', monospace; }
-        .stats-table input { width: 50px; padding: 4px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius); text-align: center; font-family: 'Courier New', monospace; }
-        .status-1 { color: var(--success-color); font-weight: bold; }
-        .status-2 { color: var(--danger-color); font-weight: bold; }
-        .status-3 { color: var(--accent-color); font-weight: bold; }
-        .stage-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-        .analytics-card { background: var(--card-bg); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border-color); }
-        .analytics-card table { border-collapse: collapse; }
-        .analytics-card th, .analytics-card td { padding: 8px; border-bottom: 1px solid var(--border-color); text-align: left; }
-        .analytics-card td:first-child { font-weight: bold; color: var(--accent-color); width: 30px; }
-        .stats-summary { display: flex; justify-content: space-around; text-align: center; font-size: 1.1em; margin-top: 20px; flex-wrap: wrap; gap: 10px; }
-        .stats-summary div { background: var(--card-bg); padding: 15px 25px; border-radius: var(--radius); border: 1px solid var(--border-color); }
-        .admin-tab.tab-btn { display: none !important; }
-        body.is-admin .admin-tab.tab-btn { display: inline-block !important; }
-        .missed-select { padding: 4px; border-radius: var(--radius); background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); font-size: 0.9em; font-family: 'Courier New', monospace; }
-        .modal-overlay { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(5px); animation: fadeIn 0.2s; }
-        .modal-content { background: var(--panel-bg); padding: 30px; border-radius: var(--radius); width: 100%; max-width: 450px; border: 1px solid var(--accent-color); box-shadow: 0 0 30px rgba(255, 152, 0, 0.2); }
-        .search-input { width: 100%; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 1em; margin-bottom: 15px; font-family: 'Courier New', monospace; }
-        .search-input:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 8px var(--accent-glow); }
-        .compare-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--card-bg); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-color); }
-        .compare-table th, .compare-table td { padding: 15px 20px; text-align: center; border-bottom: 1px solid var(--border-color); font-family: 'Courier New', monospace; }
-        .compare-table th { background: #111411; font-size: 1.05em; color: var(--text-color); font-weight: bold; text-transform: uppercase; }
-        .compare-table th:first-child { text-align: left; color: var(--text-muted); width: 25%; }
-        .compare-table td:first-child { text-align: left; font-weight: 500; color: var(--text-muted); }
-        .compare-table tr:hover { background: rgba(255,152,0,0.05); }
-        .compare-winner { color: var(--success-color); font-weight: bold; text-shadow: 0 0 5px rgba(76, 175, 80, 0.4); }
-        .timeline { position: relative; max-width: 1000px; margin: 0 auto; padding: 20px 0; }
-        .timeline::after { content: ''; position: absolute; width: 4px; background-color: var(--border-color); top: 0; bottom: 0; left: 50%; margin-left: -2px; }
-        .timeline-item { padding: 10px 40px; position: relative; background-color: inherit; width: 50%; box-sizing: border-box; }
-        .timeline-item::after { content: ''; position: absolute; width: 20px; height: 20px; right: -10px; background-color: var(--bg-color); border: 4px solid var(--accent-color); top: 15px; border-radius: 50%; z-index: 1; }
-        .timeline-item.left { left: 0; text-align: right; }
-        .timeline-item.right { left: 50%; text-align: left; }
-        .timeline-item.right::after { left: -10px; }
-        .timeline-content { padding: 20px 30px; background-color: var(--card-bg); position: relative; border-radius: var(--radius); border: 1px solid var(--border-color); }
-        .timeline-date { color: var(--accent-color); font-weight: bold; font-size: 1.1em; text-transform: uppercase; margin-bottom: 5px; }
-        .timeline-opponent { font-size: 1.2em; margin-bottom: 10px; }
-        .timeline-score { font-size: 1.5em; font-weight: bold; font-family: 'Courier New', monospace; }
-        .score-win { color: var(--success-color); text-shadow: 0 0 10px rgba(76,175,80,0.5); }
-        .score-loss { color: var(--danger-color); }
-        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
-        .toast { padding: 15px 25px; border-radius: var(--radius); font-weight: bold; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards; display: flex; align-items: center; gap: 10px; min-width: 250px; color: #000; text-transform: uppercase; font-family: 'Courier New', monospace;}
-        .toast-success { background: var(--success-color); border-left: 5px solid #2e7d32; }
-        .toast-error { background: var(--danger-color); color: #fff; border-left: 5px solid #b71c1c; }
-        .toast-info { background: var(--accent-color); border-left: 5px solid #e65100; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-        @media screen and (max-width: 768px) {
-            .timeline::after { left: 31px; }
-            .timeline-item { width: 100%; padding-left: 70px; padding-right: 25px; }
-            .timeline-item.right { left: 0%; }
-            .timeline-item.left { text-align: left; }
-            .timeline-item.left::after, .timeline-item.right::after { left: 21px; }
+const SUPABASE_URL = 'https://rpqiapddvlkdecddczqx.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz'; 
+const { createClient } = supabase;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allNotes = [];
+let currentEditId = null, maxAttendanceStage = 3, maxTournament = 4, isAdmin = false, currentPhotoFile = null;
+let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
+
+let currentSeason = 'all';
+const TOURNAMENTS_PER_SEASON = 12;
+
+let myChart = null;
+
+const ADMIN_SECRET_CODE = 'ADMIN123';
+const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
+
+// Конфиг отрядов вынесен в let для возможности редактирования
+let SQUADS_CONFIG = [
+    { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
+    { name: '2 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
+    { name: '3 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
+    { name: '4 Отряд поддержки', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
+    { name: '5 Отряд поддержки', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
+    { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
+];
+
+// Загрузка кастомных названий отрядов
+const savedSquads = localStorage.getItem('custom_squads');
+if (savedSquads) {
+    try {
+        const parsed = JSON.parse(savedSquads);
+        if (Array.isArray(parsed) && parsed.length === 6) {
+            SQUADS_CONFIG.forEach((sq, i) => { sq.name = parsed[i]; });
         }
-        @media (max-width: 992px) {
-            .profile-layout { flex-direction: column; height: auto; }
-            .player-list-panel { width: 100%; max-height: 300px; }
-            .roster-layout { flex-direction: column; }
-            .free-players-panel { width: 100%; position: static; }
-            .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
-        }
-        @media (max-width: 768px) {
-            .header, .stage-header { flex-direction: column; text-align: center; }
-            .tabs { flex-direction: column; }
-            .tab-btn { width: 100%; }
-            .analytics-grid { grid-template-columns: 1fr; }
-            .stats-summary { flex-direction: column; }
-            table { display: block; overflow-x: auto; white-space: nowrap; }
-        }
-    </style>
-</head>
-<body>
-    <div id="toast-container"></div>
+    } catch(e) { console.error('Ошибка чтения названий отрядов'); }
+}
 
-    <div class="container">
-        <div class="header">
-            <h1>STALZONE КЛАН</h1>
-            <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
-                <div style="display:flex; align-items:center; gap:8px; background:var(--card-bg); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border-color);">
-                    <span style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Сезон:</span>
-                    <select id="season-selector" onchange="switchViewingSeason(this.value)" style="background:transparent; color:var(--accent-color); border:none; padding:4px; font-family:'Courier New', monospace; font-weight:bold; cursor:pointer; font-size:1em; outline:none;">
-                        <option value="all">Все время</option>
-                        <option value="1">Сезон 1</option>
-                        <option value="2">Сезон 2</option>
-                        <option value="3">Сезон 3</option>
-                    </select>
-                    <span id="season-progress" style="color:var(--text-muted); font-size:0.75em; font-family:'Courier New', monospace; border-left:1px solid var(--border-color); padding-left:10px;">—</span>
-                </div>
-                <button class="theme-toggle" id="logout-btn" onclick="logout()" style="display:none;">Выход</button>
-            </div>
-        </div>
-        
-        <div class="tabs">
-            <button class="tab-btn active" onclick="openTab(event, 'tab-tops')">Топы</button>
-            <button class="tab-btn" id="my-profile-tab" onclick="openTab(event, 'tab-my-profile')" style="display:none;">Мой профиль</button>
-            <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-profile')">База игроков</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-roster')">Состав</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-compare')">Сравнение</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-history')">История</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-calendar')">📅 Календарь</button>
-            <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-fines')">Штрафы</button>
-            <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-attendance')">Посещаемость</button>
-            <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-missed')">Пропуски</button>
-            <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-stats')">Статистика</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-analytics')">Аналитика</button>
-        </div>
+const TIER_SETTINGS = [
+    { name: 'E', minRating: 0, winGears: 1250, lossGears: 250 },
+    { name: 'D', minRating: 1050, winGears: 1750, lossGears: 500 },
+    { name: 'C', minRating: 1150, winGears: 2400, lossGears: 800 },
+    { name: 'B', minRating: 1300, winGears: 3300, lossGears: 1200 },
+    { name: 'A', minRating: 1450, winGears: 4700, lossGears: 1800 },
+    { name: 'S', minRating: 1600, winGears: 7000, lossGears: 3000 }
+];
 
-        <!-- ТОПЫ -->
-        <div id="tab-tops" class="tab-content active">
-            <div id="loading-tops" class="loading">Загрузка данных...</div>
-            <div id="table-tops" style="display: none;">
-                <table>
-                    <thead><tr><th>Место</th><th onclick="sortTops('nickname')" style="cursor:pointer; user-select:none;">Никнейм <span id="sort-icon-nickname"></span></th><th onclick="sortTops('discord_id')" style="cursor:pointer; user-select:none;">Discord ID <span id="sort-icon-discord_id"></span></th><th onclick="sortTops('kd')" style="cursor:pointer; user-select:none;">КД <span id="sort-icon-kd"></span></th><th onclick="sortTops('kda')" style="cursor:pointer; user-select:none;">КДА <span id="sort-icon-kda"></span></th><th onclick="sortTops('points')" style="cursor:pointer; user-select:none;">Очки <span id="sort-icon-points"></span></th></tr></thead>
-                    <tbody id="players-table-body"></tbody>
-                </table>
-            </div>
-        </div>
+function getTierData(rating) {
+    let current = TIER_SETTINGS[0];
+    for (let t of TIER_SETTINGS) { if (rating >= t.minRating) current = t; }
+    return current;
+}
 
-        <!-- МОЙ ПРОФИЛЬ -->
-        <div id="tab-my-profile" class="tab-content">
-            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Личный кабинет</h2>
-            <div id="my-profile-content" style="display:none;">
-                <div class="analytics-card" style="margin-bottom:20px;">
-                    <h3 style="color:var(--accent-color); text-align:center; margin-top:0; text-transform: uppercase;">Моя статистика (сезон)</h3>
-                    <div class="stats-summary" style="margin-top:15px;">
-                        <div><span style="color:var(--text-muted);">КД:</span> <strong id="my-kd">0</strong></div>
-                        <div><span style="color:var(--text-muted);">КДА:</span> <strong id="my-kda">0</strong></div>
-                        <div><span style="color:var(--text-muted);">Очки:</span> <strong id="my-points">0</strong></div>
-                        <div><span style="color:var(--text-muted);">Отряд:</span> <strong id="my-squad">-</strong></div>
-                        <div><span style="color:var(--text-muted);">Статус:</span> <strong id="my-status">-</strong></div>
-                    </div>
-                </div>
-                <div class="analytics-card" style="margin-bottom:20px;">
-                    <h3 style="color:var(--danger-color); text-align:center; margin-top:0; text-transform: uppercase;">Мои штрафы</h3>
-                    <table style="width:100%;"><thead><tr><th>Причина</th><th>Сумма</th><th>Статус</th></tr></thead><tbody id="my-fines-body"></tbody></table>
-                </div>
-                <div class="analytics-card">
-                    <h3 style="color:var(--success-color); text-align:center; margin-top:0; text-transform: uppercase;">Моя посещаемость</h3>
-                    <div style="overflow-x:auto;"><table class="attendance-table" id="my-attendance-table"><thead id="my-attendance-thead"></thead><tbody id="my-attendance-body"></tbody></table></div>
-                </div>
-            </div>
-        </div>
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    let icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
+    toast.innerHTML = `<span style="font-size:1.2em;">${icon}</span> <span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
 
-        <!-- БАЗА ИГРОКОВ -->
-        <div id="tab-profile" class="tab-content admin-tab">
-            <div class="profile-layout">
-                <div class="player-list-panel">
-                    <div class="player-list-header"><h3 style="margin:0; text-transform: uppercase;">Бойцы</h3><button class="btn" onclick="clearForm()" style="padding:6px 10px; font-size:0.8em;">Новый</button></div>
-                    <div style="padding: 10px; border-bottom: 1px solid var(--border-color);"><input type="text" id="player-search-input" placeholder="ПОИСК..." oninput="filterPlayerList()" class="search-input" style="margin-bottom:0; text-transform: uppercase;"></div>
-                    <div class="player-list" id="player-list-container"></div>
-                </div>
-                <div class="profile-form-panel">
-                    <h2 id="form-title" style="margin-top:0; color:var(--accent-color); text-align: center; margin-bottom: 20px; text-transform: uppercase;">Новый боец</h2>
-                    <input type="hidden" id="edit-player-id">
-                    <div class="form-grid-3">
-                        <div class="form-group"><label>Никнейм</label><input type="text" id="profile-nickname"></div>
-                        <div class="form-group"><label>Discord ID</label><input type="text" id="profile-discord-id"></div>
-                        <div class="form-group"><label>Статус</label><select id="profile-status" style="width:100%;"><option value="в обработке">В обработке</option><option value="в клане">В клане</option><option value="кикнут">Кикнут</option></select></div>
-                    </div>
-                    <div class="form-grid-3">
-                        <div class="form-group"><label>КД</label><input type="number" step="0.1" id="profile-kd"></div>
-                        <div class="form-group"><label>КДА</label><input type="number" step="0.1" id="profile-kda"></div>
-                        <div class="form-group"><label>Очки</label><input type="number" id="profile-points"></div>
-                    </div>
-                    <div class="form-grid-3"><div class="checkbox-group" style="grid-column: 1 / -1;"><input type="checkbox" id="profile-sledgehammer"><label for="profile-sledgehammer">Кувалда</label></div></div>
-                    <div class="form-grid-2" style="margin-top: 15px;">
-                        <div class="form-group"><label>Отряд</label><select id="profile-squad"></select></div>
-                        <div class="form-group"><label>Роль</label><select id="profile-role"></select></div>
-                    </div>
-                    <div class="form-grid-2" style="margin-top: 15px;">
-                        <div class="form-group"><label>Автомат</label><select id="select-rifle"></select></div>
-                        <div class="form-group"><label>ПП</label><select id="select-smg"></select></div>
-                        <div class="form-group"><label>Пулемет</label><select id="select-machine-gun"></select></div>
-                        <div class="form-group"><label>Дробовик</label><select id="select-shotgun"></select></div>
-                        <div class="form-group"><label>Снайперка</label><select id="select-sniper"></select></div>
-                        <div class="form-group"><label>Пистолет</label><select id="select-pistol"></select></div>
-                    </div>
-                    <h3 class="form-section-title">Броня</h3>
-                    <div class="form-grid-2">
-                        <div>
-                            <div class="form-group"><label>Боевая броня</label><select id="select-armor-combat"></select></div>
-                            <div class="form-group"><label>Скорость</label><input type="number" id="profile-speed-combat" placeholder="0"></div>
-                            <div class="form-group"><label>Приведенка</label><input type="number" id="profile-penetration-combat" placeholder="0"></div>
-                        </div>
-                        <div>
-                            <div class="form-group"><label>Комбинированная</label><select id="select-armor-combined"></select></div>
-                            <div class="form-group"><label>Скорость</label><input type="number" id="profile-speed-combined" placeholder="0"></div>
-                            <div class="form-group"><label>Приведенка</label><input type="number" id="profile-penetration-combined" placeholder="0"></div>
-                        </div>
-                    </div>
-                    
-                    <div id="player-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
-                        <h3 style="color:var(--accent-color); margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📝 Заметки тренера</h3>
-                        <div id="player-notes-list" style="max-height:260px; overflow-y:auto; margin-bottom:10px;"></div>
-                        <div class="form-group" style="margin-bottom:8px;">
-                            <textarea id="player-note-input" rows="2" placeholder="Например: плохо держит угол на Низине..." style="width:100%; padding:8px 12px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-family:'Courier New', monospace; font-size:0.95em; resize:vertical;"></textarea>
-                        </div>
-                        <button class="btn" onclick="addPlayerNote('coach')" style="width:100%; padding:8px;">+ Добавить заметку</button>
-                    </div>
+function initSearchableSelect(id, direction = 'up') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.tomselect) el.tomselect.destroy();
+    new TomSelect(el, { create: false, sortField: { field: "text", direction: "asc" }, maxItems: 1, dropdownDirection: direction });
+}
 
-                    <div id="player-timekeeper-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
-                        <h3 style="color:#9cdcfe; margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📋 Заметки табельщика</h3>
-                        <div id="player-timekeeper-notes-list" style="max-height:260px; overflow-y:auto; margin-bottom:10px;"></div>
-                        <div class="form-group" style="margin-bottom:8px;">
-                            <textarea id="player-timekeeper-note-input" rows="2" placeholder="Например: пропустил 2 этапа без предупреждения..." style="width:100%; padding:8px 12px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-family:'Courier New', monospace; font-size:0.95em; resize:vertical;"></textarea>
-                        </div>
-                        <button class="btn" onclick="addPlayerNote('timekeeper')" style="width:100%; padding:8px; background:#9cdcfe; color:#000;">+ Добавить заметку</button>
-                    </div>
+function checkLogin() {
+    const input = document.getElementById('login-input').value.trim(); if (!input) return;
+    if (input === ADMIN_SECRET_CODE) {
+        isAdmin = true; document.body.classList.add('is-admin');
+        document.getElementById('login-modal').style.display = 'none';
+        document.getElementById('logout-btn').style.display = 'inline-block';
+        document.getElementById('my-profile-tab').style.display = 'inline-block'; loadAllData();
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex'); 
+        showToast('Вы вошли как Администратор', 'info');
+    } else {
+        const player = allPlayers.find(p => p.discord_id && p.discord_id.toString().trim() === input);
+        if (player) {
+            document.getElementById('login-modal').style.display = 'none';
+            document.getElementById('logout-btn').style.display = 'inline-block';
+            document.getElementById('my-profile-tab').style.display = 'inline-block';
+            loadAllData().then(() => loadMyProfile(player));
+            showToast('Успешный вход', 'success');
+        } else { document.getElementById('login-error').innerText = 'Игрок с таким Discord ID не найден.'; }
+    }
+}
 
-                    <div style="margin-top:25px; display:flex; gap:10px; flex-wrap:wrap;">
-                        <button class="btn" onclick="saveProfile()">Сохранить</button>
-                        <button class="btn" style="background:var(--accent-color); color:#000;" onclick="recalculatePlayerStats(currentEditId)">Пересчитать</button>
-                        <button class="btn btn-danger" onclick="deletePlayer()" id="btn-delete" style="display:none;">Удалить</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+function logout() { location.reload(); }
 
-        <!-- СОСТАВ -->
-        <div id="tab-roster" class="tab-content">
-            <div class="stage-header">
-                <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Состав клана</h2>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn admin-only" onclick="openSquadNamesModal()" style="background:var(--accent-color); color:#000;">⚙️ Названия отрядов</button>
-                    <button class="btn btn-danger" onclick="clearAllSquads()" id="btn-clear-roster">Очистить состав</button>
-                    <button class="btn" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
-                </div>
-            </div>
-            <div class="roster-layout">
-                <div class="roster-board" id="roster-board"></div>
-                <div class="free-players-panel">
-                    <h3 style="margin-top:0; color:var(--accent-color); text-transform: uppercase;">Резерв</h3>
-                    <input type="text" id="free-search-input" placeholder="ПОИСК..." oninput="initDragAndDrop(this.value)" class="search-input" style="text-transform: uppercase;">
-                    <div id="free-players-list"></div>
-                    <div id="free-empty-msg" style="display:none; color:var(--text-muted); text-align:center; font-size:0.9em; padding:15px; text-transform: uppercase;">Пусто</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- СРАВНЕНИЕ -->
-        <div id="tab-compare" class="tab-content">
-            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Сравнение</h2>
-            <div style="max-width: 900px; margin: 0 auto 25px auto;">
-                <div class="form-grid-2">
-                    <div class="form-group"><label>Бойцы (до 4-х)</label><select id="compare-players" multiple></select></div>
-                    <div class="form-group"><label>Период</label><select id="compare-period"></select></div>
-                </div>
-            </div>
-            <div id="compare-results" style="max-width: 1100px; margin: 0 auto; overflow-x: auto;">
-                <div style="text-align:center; color:var(--text-muted); padding: 20px; text-transform: uppercase;">Выберите бойцов</div>
-            </div>
-        </div>
-
-        <!-- ИСТОРИЯ -->
-        <div id="tab-history" class="tab-content">
-            <div class="stage-header">
-                <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">История матчей</h2>
-            </div>
-            
-            <div class="analytics-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom: 30px;">
-                <h3 style="color:var(--accent-color); margin-top:0; text-transform: uppercase;">Общая диагностика</h3>
-                <div style="display:flex; justify-content:center; gap:20px; margin-bottom:20px; width:100%; flex-wrap:wrap;">
-                    <div style="background:rgba(255,152,0,0.1); border:2px solid var(--accent-color); border-radius:var(--radius); padding:15px 30px; text-align:center; box-shadow:0 0 15px rgba(255,152,0,0.2); flex:1; min-width:200px;">
-                        <div style="color:var(--accent-color); font-size:0.9em; text-transform:uppercase; letter-spacing:2px; font-weight:bold; margin-bottom:5px;">Рейтинг</div>
-                        <div><strong id="hr-rating" style="color:var(--accent-color); font-size:2.5em; font-family:'Courier New', monospace; text-shadow:0 0 10px rgba(255,152,0,0.5);">1000</strong></div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.05); border:2px solid #555; border-radius:var(--radius); padding:15px 30px; text-align:center; flex:1; min-width:200px;">
-                        <div style="color:var(--text-muted); font-size:0.9em; text-transform:uppercase; letter-spacing:2px; font-weight:bold; margin-bottom:5px;">Текущий Тир</div>
-                        <div><strong id="hr-tier" style="color:var(--accent-color); font-size:2.5em; font-family:'Courier New', monospace;">E Тир</strong></div>
-                    </div>
-                    <div style="background:rgba(156,220,254,0.05); border:2px solid #9cdcfe; border-radius:var(--radius); padding:15px 30px; text-align:center; flex:1; min-width:200px;">
-                        <div style="color:#9cdcfe; font-size:0.9em; text-transform:uppercase; letter-spacing:2px; font-weight:bold; margin-bottom:5px;">Заработано гильз</div>
-                        <div><strong id="hr-gears" style="color:#9cdcfe; font-size:2.5em; font-family:'Courier New', monospace;">0</strong></div>
-                    </div>
-                </div>
-                <div style="width: 250px; height: 250px;"><canvas id="matchHistoryChart"></canvas></div>
-                <div id="history-winrate" style="display:flex; gap:25px; flex-wrap:wrap; justify-content:center; margin-top:20px; font-size:1.1em; font-family:'Courier New', monospace;">
-                    <div><div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Победы</div><div><strong id="hr-wins" style="color:var(--success-color); font-size:1.4em;">0</strong> <span style="color:var(--text-muted);">(<span id="hr-wins-pct">0%</span>)</span></div></div>
-                    <div><div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Поражения</div><div><strong id="hr-losses" style="color:var(--danger-color); font-size:1.4em;">0</strong> <span style="color:var(--text-muted);">(<span id="hr-losses-pct">0%</span>)</span></div></div>
-                    <div><div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Ничьи</div><div><strong id="hr-draws" style="color:var(--accent-color); font-size:1.4em;">0</strong> <span style="color:var(--text-muted);">(<span id="hr-draws-pct">0%</span>)</span></div></div>
-                    <div><div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Всего</div><div><strong id="hr-total" style="color:var(--text-color); font-size:1.4em;">0</strong> <span style="color:var(--text-muted);">игр</span></div></div>
-                </div>
-            </div>
-            <div style="display:flex; justify-content:center; margin-bottom: 20px; gap: 10px;" class="admin-only"><button class="btn" onclick="addMatchHistory()">Заполнить первый свободный этап</button></div>
-            <div class="timeline" id="history-timeline"></div>
-        </div>
-
-        <!-- КАЛЕНДАРЬ -->
-        <div id="tab-calendar" class="tab-content">
-            <div class="stage-header"><h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">📅 Календарь турниров</h2></div>
-            
-            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--border-color); display:none;">
-                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать один турнир</h3>
-                <div class="form-grid-3">
-                    <div class="form-group"><label>Дата турнира</label><input type="date" id="cal-date"></div>
-                    <div class="form-group"><label>Время начала</label><input type="time" id="cal-time"></div>
-                    <div class="form-group"><label>Номер турнира</label><input type="number" id="cal-tournament" placeholder="Например: 3"></div>
-                </div>
-                <div class="form-grid-2">
-                    <div class="form-group"><label>Заметки</label><input type="text" id="cal-notes" placeholder="Сбор в 19:30"></div>
-                    <div class="form-group"><label>Номер этапа (опционально)</label><input type="number" id="cal-stage" placeholder="Оставьте пустым для всех 3-х"></div>
-                </div>
-                <button class="btn" onclick="addUpcomingMatch()" style="margin-top:10px;">Добавить в календарь</button>
-            </div>
-
-            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--accent-color); display:none;">
-                <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">⚡ Массовое заполнение сезона</h3>
-                <div class="form-grid-2">
-                    <div class="form-group"><label>Дата начала</label><input type="date" id="bulk-start"></div>
-                    <div class="form-group"><label>Дата конца</label><input type="date" id="bulk-end"></div>
-                </div>
-                <div class="form-grid-2">
-                    <div class="form-group"><label>Стартовый номер турнира</label><input type="number" id="bulk-start-tournament" value="1"></div>
-                    <div class="form-group"><label>Время (для всех)</label><input type="time" id="bulk-time" value="19:00"></div>
-                </div>
-                <div class="form-group" style="display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">
-                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="1"> Пн</label>
-                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="2"> Вт</label>
-                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="3"> Ср</label>
-                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="4" checked> Чт</label>
-                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="5" checked> Пт</label>
-                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="6" checked> Сб</label>
-                    <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="0"> Вс</label>
-                </div>
-                <div class="form-group">
-                    <label>Заметки (для всех)</label><input type="text" id="bulk-notes" placeholder="Сезон 2">
-                </div>
-                <small style="color:var(--accent-color); display:block; margin-top:10px; font-size:0.85em;">* На каждый выбранный день автоматически создастся 1 турнир (внутри него 3 этапа). Нумерация продолжится автоматически.</small>
-                <button class="btn" onclick="generateBulkCalendar()" style="margin-top:15px; width:100%; background:var(--accent-color); color:#000;">Сгенерировать события</button>
-            </div>
-
-            <div id="calendar-list"></div>
-        </div>
-
-        <!-- ШТРАФЫ -->
-        <div id="tab-fines" class="tab-content admin-tab">
-            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Штрафы</h2>
-            <div style="background:var(--card-bg); padding:15px; border-radius:var(--radius); margin-bottom:20px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; border:1px solid var(--border-color);">
-                <div class="form-group" style="flex:2; margin:0;"><label>Боец</label><select id="fine-player"></select></div>
-                <div class="form-group" style="flex:2; margin:0;"><label>Причина</label><input type="text" id="fine-reason"></div>
-                <div class="form-group" style="flex:1; margin:0;"><label>Сумма</label><input type="number" id="fine-amount"></div>
-                <button class="btn" onclick="addFine()">Добавить</button>
-            </div>
-            <table><thead><tr><th>Боец</th><th>Причина</th><th>Сумма</th><th>Статус</th><th>Действия</th></tr></thead><tbody id="fines-table-body"></tbody></table>
-        </div>
-
-        <!-- ПОСЕЩАЕМОСТЬ -->
-        <div id="tab-attendance" class="tab-content admin-tab">
-            <div class="stage-header">
-                <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Посещаемость</h2>
-                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-                    <button class="btn" onclick="addTournament()">+ Турнир (3 этапа)</button>
-                    <button class="btn btn-danger" onclick="deleteTournament()">- Турнир</button>
-                    <button class="btn btn-danger" style="background:#ff0000;" onclick="clearAllData()">ОЧИСТИТЬ СЕЗОН</button>
-                </div>
-            </div>
-            <input type="text" id="attendance-search" placeholder="ПОИСК..." oninput="loadAttendance()" class="search-input" style="text-transform: uppercase;">
-            <div style="background:var(--card-bg); padding:15px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--border-color);">
-                <button class="btn" onclick="document.getElementById('attendance-photo').click()" style="width:100%; padding:15px; font-size:1.1em; background:var(--accent-color); color:#000;">ЗАГРУЗИТЬ ФОТО</button>
-                <input type="file" id="attendance-photo" multiple accept="image/*" style="display:none;" onchange="openPhotoModal(this)">
-                <div id="photo-status" style="color:var(--success-color); font-weight:bold; text-align:center; margin-top:15px; font-size:1.1em; text-transform: uppercase;"></div>
-            </div>
-            <div style="overflow-x: auto;"><table class="attendance-table" id="attendance-main-table"><thead id="attendance-thead"></thead><tbody id="attendance-table-body"></tbody></table></div>
-        </div>
-
-        <!-- ПРОПУСКИ -->
-        <div id="tab-missed" class="tab-content admin-tab">
-            <div class="stage-header"><h2 style="color:var(--danger-color); margin:0; text-transform: uppercase;">Пропуски</h2></div>
-            <div style="overflow-x: auto;"><table class="attendance-table" id="missed-main-table"><thead><tr><th style="width: 20%;">Боец</th><th style="width: 15%;">Кол-во</th><th style="width: 65%;">Детали</th></tr></thead><tbody id="missed-table-body"></tbody></table></div>
-        </div>
-
-        <!-- СТАТИСТИКА -->
-        <div id="tab-stats" class="tab-content admin-tab">
-            <div class="stage-header">
-                <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Статистика</h2>
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <button class="btn" onclick="addTournament()">+ Турнир (3 этапа)</button>
-                    <button class="btn btn-danger" onclick="deleteTournament()">- Турнир</button>
-                </div>
-            </div>
-            <input type="text" id="stats-search" placeholder="ПОИСК..." oninput="loadMatchStats()" class="search-input" style="text-transform: uppercase;">
-            <div style="overflow-x: auto;"><table class="stats-table" id="stats-main-table"><thead id="stats-thead"></thead><tbody id="stats-tbody"></tbody></table></div>
-        </div>
-
-        <!-- АНАЛИТИКА -->
-        <div id="tab-analytics" class="tab-content">
-            <div class="stage-header">
-                <h2 style="text-align:center; color:var(--accent-color); margin:0; text-transform: uppercase;">Аналитика</h2>
-                <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
-                    <button class="btn" onclick="sendAnalyticsScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
-                </div>
-            </div>
-            
-            <div class="analytics-grid">
-                <div class="analytics-card">
-                    <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП КД</h3>
-                    <table id="top-kd-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>КД</th></tr></thead><tbody></tbody></table>
-                </div>
-                <div class="analytics-card">
-                    <h3 style="color:var(--success-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП КДА</h3>
-                    <table id="top-kda-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>КДА</th></tr></thead><tbody></tbody></table>
-                </div>
-                <div class="analytics-card">
-                    <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ОЧКИ</h3>
-                    <table id="top-points-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Очки</th></tr></thead><tbody></tbody></table>
-                </div>
-                <div class="analytics-card">
-                    <h3 style="color:#9cdcfe; text-align:center; margin-bottom:15px; text-transform: uppercase;">СТАТИСТИКА ПО КАРТАМ</h3>
-                    <table id="map-stats-table" style="width:100%;">
-                        <thead><tr><th>Карта</th><th>Игр</th><th>Победы</th><th>Винрейт</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="stats-summary" style="margin-top:25px;">
-                <div><span style="color:var(--text-muted);">Всего:</span> <strong id="stat-total-players">0</strong></div>
-                <div><span style="color:var(--text-muted);">В отрядах:</span> <strong id="stat-in-squads">0</strong></div>
-                <div><span style="color:var(--text-muted);">Резерв:</span> <strong id="stat-free">0</strong></div>
-            </div>
-            <div class="analytics-card" style="margin-top: 25px;">
-                <h3 style="color:var(--accent-color); text-align:center; margin-top:0; text-transform: uppercase;">Средние</h3>
-                <div class="stats-summary" style="margin-top:15px; flex-wrap:wrap;">
-                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">КД (этап)</span><br><strong id="avg-kd-stage" style="font-size:1.5em; color:var(--accent-color);">0.00</strong></div>
-                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">КДА (этап)</span><br><strong id="avg-kda-stage" style="font-size:1.5em; color:var(--accent-color);">0.00</strong></div>
-                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Очки (этап)</span><br><strong id="avg-points-stage" style="font-size:1.5em; color:var(--accent-color);">0</strong></div>
-                </div>
-                <div class="stats-summary" style="margin-top:15px; flex-wrap:wrap; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Общий КД</span><br><strong id="avg-kd-total" style="font-size:1.5em; color: var(--success-color);">0.00</strong></div>
-                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Общий КДА</span><br><strong id="avg-kda-total" style="font-size:1.5em; color: var(--success-color);">0.00</strong></div>
-                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Общие очки</span><br><strong id="avg-points-total" style="font-size:1.5em; color: var(--success-color);">0</strong></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- МОДАЛЬНЫЕ ОКНА -->
-    <div id="login-modal" class="modal-overlay" style="display:flex;">
-        <div class="modal-content" style="text-align:center;">
-            <h2 style="color:var(--accent-color); margin-top:0; text-transform: uppercase;">Вход в систему</h2>
-            <p style="color:var(--text-muted); font-size:0.9em; margin-bottom:20px; text-transform: uppercase;">Введите Discord ID или пароль</p>
-            <div class="form-group"><input type="text" id="login-input" placeholder="ID / ПАРОЛЬ" style="text-align:center; font-size:1.1em;"></div>
-            <button class="btn" style="width:100%; padding:15px; font-size:1.1em;" onclick="checkLogin()">Войти</button>
-            <div id="login-error" style="color:var(--danger-color); margin-top:15px; font-weight:bold; text-transform: uppercase;"></div>
-        </div>
-    </div>
+function switchViewingSeason(val) {
+    currentSeason = val;
+    showToast(`Выбран сезон: ${val === 'all' ? 'Все время' : val}`, 'info');
     
-    <div id="photo-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-content">
-            <h3 style="text-align:center; color:var(--accent-color); margin-top:0; text-transform: uppercase;">Загрузка</h3>
+    if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
+    if (document.getElementById('tab-calendar').classList.contains('active')) loadCalendar();
+    if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
+    if (document.getElementById('tab-stats').classList.contains('active')) loadMatchStats();
+}
+
+function filterBySeason(tournamentNum) {
+    if (currentSeason === 'all') return true;
+    const seasonInt = parseInt(currentSeason);
+    const minT = (seasonInt - 1) * TOURNAMENTS_PER_SEASON + 1;
+    const maxT = seasonInt * TOURNAMENTS_PER_SEASON;
+    return tournamentNum >= minT && tournamentNum <= maxT;
+}
+
+function openTab(evt, tabName) {
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById(tabName).classList.add("active"); evt.currentTarget.classList.add("active");
+    
+    if (tabName === 'tab-roster') initDragAndDrop();
+    if (tabName === 'tab-profile') renderPlayerList();
+    if (tabName === 'tab-compare') initCompareTab();
+    if (tabName === 'tab-history') loadMatchHistory();
+    if (tabName === 'tab-calendar') loadCalendar();
+    if (tabName === 'tab-fines') loadFines();
+    if (tabName === 'tab-attendance') loadAttendance();
+    if (tabName === 'tab-missed') loadAllMissed();
+    if (tabName === 'tab-stats') loadMatchStats();
+    if (tabName === 'tab-analytics') loadAnalytics();
+}
+
+function goToPlayerProfile(playerId) {
+    if (!isAdmin) { showToast('Доступно только администраторам', 'error'); return; }
+    const profileTabBtn = document.querySelector('.tab-btn[onclick*="tab-profile"]');
+    if (profileTabBtn) profileTabBtn.click();
+    const player = allPlayers.find(p => p.id === playerId);
+    if (player) setTimeout(() => { selectPlayer(player); }, 50);
+}
+
+function populateProfileDropdowns() {
+    const squadSelect = document.getElementById('profile-squad');
+    const roleSelect = document.getElementById('profile-role');
+    if (!squadSelect || !roleSelect) return;
+    if (squadSelect.tomselect) squadSelect.tomselect.destroy();
+    if (roleSelect.tomselect) roleSelect.tomselect.destroy();
+
+    squadSelect.innerHTML = '<option value="">-- Без отряда --</option>';
+    SQUADS_CONFIG.forEach(sq => { squadSelect.innerHTML += `<option value="${sq.name}">${sq.name}</option>`; });
+    roleSelect.innerHTML = '<option value="">-- Без роли --</option>';
+    SQUADS_CONFIG[0].roles.forEach(r => { roleSelect.innerHTML += `<option value="${r}">${r}</option>`; });
+}
+
+// ==================== РЕДАКТИРОВАНИЕ ОТРЯДОВ ====================
+function openSquadNamesModal() {
+    if (!isAdmin) return;
+    const container = document.getElementById('squad-names-inputs');
+    container.innerHTML = '';
+    SQUADS_CONFIG.forEach((sq, i) => {
+        container.innerHTML += `
             <div class="form-group">
-                <label id="modal-stage-label">Этап</label>
-                <select id="modal-stage"><option value="1">Этап 1</option><option value="2">Этап 2</option><option value="3">Этап 3</option></select>
+                <label>Отряд ${i+1}</label>
+                <input type="text" id="squad-name-input-${i}" value="${sq.name}">
             </div>
-            <div id="photo-preview" style="text-align:center; margin-bottom:20px; display:none;"></div>
-            <button class="btn" style="width:100%; margin-bottom:15px;" onclick="confirmPhotoUpload()">РАСПОЗНАТЬ</button>
-            <button class="btn btn-danger" style="width:100%;" onclick="closePhotoModal()">ОТМЕНА</button>
-        </div>
-    </div>
-    
-    <div id="absent-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-content" style="max-height: 80vh; display:flex; flex-direction:column;">
-            <h3 style="text-align:center; color:var(--danger-color); margin-top:0; text-transform: uppercase;">Отсутствующие</h3>
-            <p style="text-align:center; font-size:0.9em; color:var(--text-muted); margin-bottom:20px; text-transform: uppercase;">Выберите статус</p>
-            <div id="absent-players-list" style="flex:1; overflow-y:auto; margin-bottom:20px; padding-right:5px;"></div>
-            <button class="btn" style="width:100%; margin-bottom:15px;" id="save-absent-btn" onclick="saveAbsentStatuses()">ПОДТВЕРДИТЬ</button>
-            <button class="btn btn-danger" style="width:100%;" onclick="document.getElementById('absent-modal').style.display='none'">ОТМЕНА</button>
-        </div>
-    </div>
+        `;
+    });
+    document.getElementById('squad-names-modal').style.display = 'flex';
+}
 
-    <!-- МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ОТРЯДОВ -->
-    <div id="squad-names-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-content">
-            <h3 style="text-align:center; color:var(--accent-color); margin-top:0; text-transform: uppercase;">Названия отрядов</h3>
-            <div id="squad-names-inputs"></div>
-            <button class="btn" style="width:100%; margin-bottom:15px;" onclick="saveSquadNames()">СОХРАНИТЬ</button>
-            <button class="btn btn-danger" style="width:100%;" onclick="document.getElementById('squad-names-modal').style.display='none'">ОТМЕНА</button>
-        </div>
-    </div>
-</body>
-</html>
+async function saveSquadNames() {
+    if (!isAdmin) return;
+    let changed = false;
+    const changes = [];
+    const uniqueNames = new Set();
+
+    for (let i = 0; i < SQUADS_CONFIG.length; i++) {
+        const inputVal = document.getElementById(`squad-name-input-${i}`).value.trim();
+        if (!inputVal) return showToast('Название отряда не может быть пустым', 'error');
+        if (uniqueNames.has(inputVal)) return showToast('Названия отрядов не должны совпадать', 'error');
+        uniqueNames.add(inputVal);
+        
+        if (inputVal !== SQUADS_CONFIG[i].name) {
+            changes.push({ old: SQUADS_CONFIG[i].name, new: inputVal });
+            SQUADS_CONFIG[i].name = inputVal;
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        document.getElementById('squad-names-modal').style.display = 'none';
+        return;
+    }
+
+    // Обновляем БД
+    for (const ch of changes) {
+        await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
+    }
+
+    // Сохраняем в localStorage
+    localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
+
+    document.getElementById('squad-names-modal').style.display = 'none';
+    showToast('Названия отрядов сохранены!', 'success');
+    await loadAllData();
+    initDragAndDrop();
+}
+// =============================================================
+
+async function loadAllData() {
+    populateProfileDropdowns();
+    
+    const { data: players } = await supabaseClient.from('players').select('*').order('kd', { ascending: false });
+    if (players) { allPlayers = players; activePlayers = players.filter(p => !p.status || p.status === 'в клане'); renderTops(); renderPlayerList(); fillPlayerSelects(); }
+    
+    const { data: notesData } = await supabaseClient.from('player_notes').select('*');
+    if (notesData) allNotes = notesData;
+
+    const { data: rifles } = await supabaseClient.from('assault_rifles').select('name').order('name');
+    const selectRifle = document.getElementById('select-rifle');
+    if (selectRifle) {
+        selectRifle.innerHTML = '<option value="">-- Выберите --</option>';
+        if (rifles) rifles.forEach(i => { const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; selectRifle.appendChild(o); });
+        const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectRifle.appendChild(v);
+    }
+    
+    const { data: smgs } = await supabaseClient.from('smgs').select('name').order('name');
+    const selectSmg = document.getElementById('select-smg');
+    if (selectSmg) {
+        selectSmg.innerHTML = '<option value="">-- Выберите --</option>';
+        if (smgs) smgs.forEach(i => { const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; selectSmg.appendChild(o); });
+        const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectSmg.appendChild(v);
+    }
+    
+    const { data: pistols } = await supabaseClient.from('pistols').select('name').order('name');
+    const selectPistol = document.getElementById('select-pistol');
+    if (selectPistol) {
+        selectPistol.innerHTML = '<option value="">-- Выберите --</option>';
+        if (pistols) pistols.forEach(i => { const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; selectPistol.appendChild(o); });
+        const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectPistol.appendChild(v);
+    }
+    
+    const { data: snipers } = await supabaseClient.from('snipers').select('name').order('name');
+    const selectSniper = document.getElementById('select-sniper');
+    if (selectSniper) {
+        selectSniper.innerHTML = '<option value="">-- Выберите --</option>';
+        if (snipers) snipers.forEach(i => { const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; selectSniper.appendChild(o); });
+        const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectSniper.appendChild(v);
+    }
+
+    const { data: mgs } = await supabaseClient.from('machine_guns').select('name').order('name');
+    const selectMG = document.getElementById('select-machine-gun');
+    if (selectMG) {
+        selectMG.innerHTML = '<option value="">-- Выберите --</option>';
+        if (mgs) mgs.forEach(i => { const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; selectMG.appendChild(o); });
+        const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectMG.appendChild(v);
+    }
+
+    const { data: shotguns } = await supabaseClient.from('shotguns').select('name').order('name');
+    const selectShotgun = document.getElementById('select-shotgun');
+    if (selectShotgun) {
+        selectShotgun.innerHTML = '<option value="">-- Выберите --</option>';
+        if (shotguns) shotguns.forEach(i => { const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; selectShotgun.appendChild(o); });
+        const v = document.createElement('option'); v.value = "Ветеранское"; v.textContent = "Ветеранское"; v.style.color = "var(--accent-color)"; selectShotgun.appendChild(v);
+    }
+    
+    const { data: armorItems } = await supabaseClient.from('armor').select('name, type').order('name');
+    const fillArmorSelect = (selectId, typeFilter) => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        select.innerHTML = '<option value="">-- Выберите --</option>';
+        (armorItems || []).filter(i => (i.type || 'combat') === typeFilter).forEach(i => {
+            const o = document.createElement('option'); o.value = i.name; o.textContent = i.name; select.appendChild(o);
+        });
+        const v = document.createElement('option'); v.value = "Ветеранская"; v.textContent = "Ветеранская"; v.style.color = "var(--danger-color)"; select.appendChild(v);
+    };
+    fillArmorSelect('select-armor-combat', 'combat');
+    fillArmorSelect('select-armor-combined', 'combined');
+
+    initSearchableSelect('select-rifle');
+    initSearchableSelect('select-smg');
+    initSearchableSelect('select-sniper');
+    initSearchableSelect('select-pistol');
+    initSearchableSelect('select-machine-gun');
+    initSearchableSelect('select-shotgun');
+    initSearchableSelect('select-armor-combat');
+    initSearchableSelect('select-armor-combined');
+    initSearchableSelect('profile-squad');
+    initSearchableSelect('profile-role');
+    initSearchableSelect('profile-status');
+    initSearchableSelect('fine-player');
+}
+
+function renderTops() {
+    document.getElementById('loading-tops').style.display = 'none'; 
+    document.getElementById('table-tops').style.display = 'block';
+    const tbody = document.getElementById('players-table-body');
+    const columns = ['nickname', 'discord_id', 'kd', 'kda', 'points'];
+    columns.forEach(col => {
+        const icon = document.getElementById(`sort-icon-${col}`);
+        if (icon) {
+            if (col === currentSortColumn) { icon.innerText = currentSortDirection === 'asc' ? ' ▲' : ' ▼'; icon.style.color = 'var(--accent-color)'; } 
+            else { icon.innerText = ''; }
+        }
+    });
+
+    let sortedPlayers = [...activePlayers].sort((a, b) => {
+        let valA = a[currentSortColumn], valB = b[currentSortColumn];
+        if (valA === null || valA === undefined) valA = '';
+        if (valB === null || valB === undefined) valB = '';
+        if (typeof valA === 'string' && typeof valB === 'string') { return currentSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); } 
+        else { return currentSortDirection === 'asc' ? (parseFloat(valA) || 0) - (parseFloat(valB) || 0) : (parseFloat(valB) || 0) - (parseFloat(valA) || 0); }
+    });
+
+    tbody.innerHTML = sortedPlayers.length === 0 ? '<tr><td colspan="6" style="text-align:center;">Нет данных</td></tr>' : '';
+    sortedPlayers.forEach((p, i) => {
+        tbody.innerHTML += `<tr><td>#${i+1}</td><td><strong>${p.nickname}</strong></td><td>${p.discord_id || '-'}</td><td>${p.kd}</td><td>${p.kda}</td><td style="color:var(--accent-color);font-weight:bold;">${p.points}</td></tr>`; 
+    });
+}
+
+function sortTops(column) {
+    if (currentSortColumn === column) { currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc'; } 
+    else { currentSortColumn = column; currentSortDirection = 'desc'; }
+    renderTops();
+}
+
+function fillPlayerSelects() {
+    const select = document.getElementById('fine-player'); if (!select) return;
+    select.innerHTML = '<option value="">-- Выберите игрока --</option>';
+    activePlayers.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.nickname; select.appendChild(o); });
+    initSearchableSelect('fine-player', 'up');
+}
+
+function renderPlayerList(filterText = '') {
+    const container = document.getElementById('player-list-container'); if (!container) return;
+    container.innerHTML = '';
+    const searchLower = filterText.toLowerCase().trim();
+    let filteredPlayers = allPlayers.filter(p => (p.nickname && p.nickname.toLowerCase().includes(searchLower)) || (p.discord_id && p.discord_id.toString().toLowerCase().includes(searchLower)));
+    filteredPlayers.sort((a, b) => {
+        const sA = a.status ? a.status.toLowerCase() : 'в клане', sB = b.status ? b.status.toLowerCase() : 'в клане';
+        return (STATUS_PRIORITY[sA] || 2) !== (STATUS_PRIORITY[sB] || 2) ? (STATUS_PRIORITY[sA] || 2) - (STATUS_PRIORITY[sB] || 2) : a.nickname.localeCompare(b.nickname); 
+    });
+    if (filteredPlayers.length === 0) { container.innerHTML = '<div style="text-align:center; color:#888; padding: 20px;">Никого не найдено</div>'; return; }
+    
+    filteredPlayers.forEach(p => {
+        const div = document.createElement('div'); div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
+        let sColor = 'var(--success-color)'; if (p.status === 'в обработке') sColor = 'var(--accent-color)'; if (p.status === 'кикнут') sColor = 'var(--danger-color)';
+        
+        const pNotes = allNotes.filter(n => n.player_id === p.id);
+        const coachCount = pNotes.filter(n => n.note_type === 'coach').length;
+        const tkCount = pNotes.filter(n => n.note_type === 'timekeeper').length;
+        
+        let badges = '';
+        if (coachCount > 0) badges += `<span style="background:#4caf50; color:#000; padding:2px 6px; border-radius:10px; font-size:0.75em; font-weight:bold; line-height:1; flex-shrink:0;" title="Заметки тренера">📝 ${coachCount}</span>`;
+        if (tkCount > 0) badges += `<span style="background:#9cdcfe; color:#000; padding:2px 6px; border-radius:10px; font-size:0.75em; font-weight:bold; line-height:1; flex-shrink:0;" title="Заметки табельщика">📋 ${tkCount}</span>`;
+
+        div.innerHTML = `
+            <div style="display:flex; flex-direction:column; flex: 1; min-width: 0; padding-right: 10px;">
+                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-bottom:4px;">
+                    <span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.nickname}">${p.nickname}</span>
+                    ${badges}
+                </div>
+                <span style="font-size:0.75em; color:${sColor};">${p.status || 'в клане'}</span>
+            </div>
+            <div style="color:#888; font-size:0.75em; text-align:right; flex-shrink:0; max-width:110px; word-break:break-all; line-height:1.1;">
+                ${p.discord_id || 'ID: ' + p.id}
+            </div>
+        `;
+        div.onclick = () => selectPlayer(p); container.appendChild(div);
+    });
+}
+
+function filterPlayerList() { const i = document.getElementById('player-search-input'); if (i) renderPlayerList(i.value); }
+
+async function selectPlayer(p) {
+    currentEditId = p.id;
+    document.getElementById('form-title').innerText = "Редактирование: " + p.nickname;
+    document.getElementById('edit-player-id').value = p.id; document.getElementById('profile-nickname').value = p.nickname || '';
+    document.getElementById('profile-discord-id').value = p.discord_id || ''; document.getElementById('profile-kd').value = p.kd || 0;
+    document.getElementById('profile-kda').value = p.kda || 0; document.getElementById('profile-points').value = p.points || 0;
+    document.getElementById('profile-sledgehammer').checked = p.has_sledgehammer || false;
+    document.getElementById('profile-speed-combat').value = p.speed_combat || ''; 
+    document.getElementById('profile-penetration-combat').value = p.penetration_combat || '';
+    document.getElementById('profile-speed-combined').value = p.speed_combined || ''; 
+    document.getElementById('profile-penetration-combined').value = p.penetration_combined || '';
+
+    ['select-rifle','select-smg','select-sniper','select-pistol','select-machine-gun','select-shotgun','select-armor-combat','select-armor-combined','profile-status','profile-squad','profile-role'].forEach(id => {
+        const el = document.getElementById(id);
+        const val = id === 'profile-squad' ? (p.squad || '') : id === 'profile-role' ? (p.role || '') : id === 'profile-status' ? (p.status || 'в клане') : id === 'select-rifle' ? (p.main_rifle || '') : id === 'select-smg' ? (p.main_smg || '') : id === 'select-sniper' ? (p.sniper || '') : id === 'select-pistol' ? (p.secondary_pistol || '') : id === 'select-machine-gun' ? (p.machine_gun || '') : id === 'select-shotgun' ? (p.shotgun || '') : id === 'select-armor-combat' ? (p.armor_combat || '') : id === 'select-armor-combined' ? (p.armor_combined || '') : '';
+        if (el.tomselect) { el.tomselect.setValue(val, true); } else { el.value = val; }
+    });
+
+    document.getElementById('btn-delete').style.display = 'block';
+    renderPlayerList();
+    
+    const { data: stats } = await supabaseClient.from('match_stats').select('*').eq('player_id', p.id);
+    if (stats && stats.length > 0) {
+        let tK = 0, tD = 0, tA = 0, tP = 0;
+        stats.forEach(s => { tK += s.kills || 0; tD += s.deaths || 0; tA += s.assists || 0; tP += s.points || 0; });
+        let kd = tD === 0 ? tK : (tK / tD), kda = tD === 0 ? (tK + tA) : ((tK + tA) / tD);
+        kd = Math.round(kd * 100) / 100; kda = Math.round(kda * 100) / 100;
+        document.getElementById('profile-kd').value = kd; document.getElementById('profile-kda').value = kda; document.getElementById('profile-points').value = tP;
+        await supabaseClient.from('players').update({ kd: kd, kda: kda, points: tP }).eq('id', p.id);
+        p.kd = kd; p.kda = kda; p.points = tP; renderTops(); 
+    }
+
+    const { data: missed } = await supabaseClient.from('attendance').select('status').eq('player_id', p.id).eq('status', 'Не пришел');
+    const missedBox = document.getElementById('player-missed-stats');
+    if (missedBox) { missedBox.style.display = 'block'; document.getElementById('pm-absent').innerText = missed ? missed.length : 0; }
+
+    const coachWrapper = document.getElementById('player-notes-wrapper');
+    const tkWrapper = document.getElementById('player-timekeeper-notes-wrapper');
+    if (coachWrapper) coachWrapper.style.display = 'block';
+    if (tkWrapper) tkWrapper.style.display = 'block';
+    await loadPlayerNotes(p.id);
+}
+
+function clearForm() {
+    const s = document.getElementById('player-search-input'); if (s) s.value = ''; 
+    currentEditId = null; document.getElementById('form-title').innerText = "Новый боец";
+    document.getElementById('edit-player-id').value = '';
+    ['nickname','discord-id','kd','kda','points','speed-combat','penetration-combat','speed-combined','penetration-combined'].forEach(f => document.getElementById('profile-'+f).value = '');
+    document.getElementById('profile-sledgehammer').checked = false;
+    ['select-rifle','select-smg','select-sniper','select-pistol','select-machine-gun','select-shotgun','select-armor-combat','select-armor-combined','profile-status','profile-squad','profile-role'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el.tomselect) { el.tomselect.clear(true); } else { el.value = ''; }
+    });
+    document.getElementById('btn-delete').style.display = 'none';
+    document.getElementById('player-missed-stats').style.display = 'none';
+
+    const coachWrapper = document.getElementById('player-notes-wrapper');
+    const tkWrapper = document.getElementById('player-timekeeper-notes-wrapper');
+    if (coachWrapper) coachWrapper.style.display = 'none';
+    if (tkWrapper) tkWrapper.style.display = 'none';
+    const coachList = document.getElementById('player-notes-list'); if (coachList) coachList.innerHTML = '';
+    const tkList = document.getElementById('player-timekeeper-notes-list'); if (tkList) tkList.innerHTML = '';
+
+    renderPlayerList();
+}
+
+async function saveProfile() {
+    const nick = document.getElementById('profile-nickname').value.trim(); if (!nick) return showToast('Введите ник!', 'error');
+    const selectedSquad = document.getElementById('profile-squad').value;
+    const selectedRole = document.getElementById('profile-role').value;
+
+    if (selectedSquad && selectedRole) {
+        const existing = allPlayers.find(x => x.squad === selectedSquad && x.role === selectedRole && x.id !== currentEditId);
+        if (existing) await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', existing.id);
+    }
+
+    const data = {
+        nickname: nick, discord_id: document.getElementById('profile-discord-id').value.trim(),
+        kd: parseFloat(document.getElementById('profile-kd').value) || 0, kda: parseFloat(document.getElementById('profile-kda').value) || 0,
+        points: parseInt(document.getElementById('profile-points').value) || 0, main_rifle: document.getElementById('select-rifle').value,
+        main_smg: document.getElementById('select-smg').value, sniper: document.getElementById('select-sniper').value,
+        secondary_pistol: document.getElementById('select-pistol').value, armor_combat: document.getElementById('select-armor-combat').value,
+        armor_combined: document.getElementById('select-armor-combined').value, machine_gun: document.getElementById('select-machine-gun').value,
+        shotgun: document.getElementById('select-shotgun').value, has_sledgehammer: document.getElementById('profile-sledgehammer').checked,
+        speed_combat: parseInt(document.getElementById('profile-speed-combat').value) || 0,
+        penetration_combat: parseInt(document.getElementById('profile-penetration-combat').value) || 0,
+        speed_combined: parseInt(document.getElementById('profile-speed-combined').value) || 0,
+        penetration_combined: parseInt(document.getElementById('profile-penetration-combined').value) || 0,
+        status: document.getElementById('profile-status').value, squad: selectedSquad || null, role: selectedRole || null
+    };
+    
+    let error;
+    if (currentEditId) { const res = await supabaseClient.from('players').update(data).eq('id', currentEditId); error = res.error; }
+    else { const res = await supabaseClient.from('players').insert([data]); error = res.error; }
+    
+    if (error) showToast('Ошибка: ' + error.message, 'error'); 
+    else { showToast('Профиль успешно сохранен!', 'success'); await loadAllData(); clearForm(); }
+}
+
+async function deletePlayer() {
+    if (!currentEditId || !confirm('Удалить игрока?')) return;
+    const { error } = await supabaseClient.from('players').delete().eq('id', currentEditId);
+    if (error) showToast('Ошибка: ' + error.message, 'error'); 
+    else { showToast('Игрок удален', 'success'); await loadAllData(); clearForm(); }
+}
+
+async function loadMyProfile(player) {
+    if (!player) return; document.getElementById('my-profile-content').style.display = 'block';
+    document.getElementById('my-kd').innerText = player.kd || 0; document.getElementById('my-kda').innerText = player.kda || 0;
+    document.getElementById('my-points').innerText = player.points || 0;
+    document.getElementById('my-squad').innerText = player.squad ? `${player.squad} (${player.role})` : 'Не в отряде';
+    const statusEl = document.getElementById('my-status');
+    if (statusEl) {
+        statusEl.innerText = player.status || 'в клане';
+        statusEl.style.color = player.status === 'в обработке' ? 'var(--accent-color)' : (player.status === 'кикнут' ? 'var(--danger-color)' : 'var(--success-color)');
+    }
+    const { data: fines } = await supabaseClient.from('fines').select('*').eq('player_id', player.id).order('created_at', { ascending: false });
+    const fBody = document.getElementById('my-fines-body');
+    fBody.innerHTML = fines.length === 0 ? '<tr><td colspan="3" style="text-align:center;">Штрафов нет</td></tr>' : '';
+    fines.forEach(f => { fBody.innerHTML += `<tr><td>${f.reason}</td><td style="color:var(--danger-color);">${f.amount} ₽</td><td class="${f.status === 'open' ? 'status-open' : 'status-closed'}">${f.status === 'open' ? 'Открыт' : 'Закрыт'}</td></tr>`; });
+    const { data: att } = await supabaseClient.from('attendance').select('*').eq('player_id', player.id);
+    let max = maxAttendanceStage;
+    if (allAttendance.length > 0) { const m = Math.max(...allAttendance.map(a => a.tournament_number)); if (m > max) max = m; }
+    const th = document.getElementById('my-attendance-thead'); let hH = '<tr><th>Игрок</th>';
+    for (let i = 1; i <= max; i++) hH += `<th>Этап ${i}</th>`; th.innerHTML = hH + '</tr>';
+    const tb = document.getElementById('my-attendance-body'); let row = `<tr><td><strong>${player.nickname}</strong></td>`;
+    for (let t = 1; t <= max; t++) {
+        const r = att.find(a => a.tournament_number === t); const s = r ? r.status : 'Не отмечен';
+        let c = s === 'Пришел' ? 'status-1' : (s === 'Не пришел' ? 'status-2' : (s === 'Отгул' ? 'status-3' : ''));
+        row += `<td class="${c}">${s === 'Не отмечен' ? '-' : s}</td>`;
+    }
+    tb.innerHTML = row + '</tr>';
+}
+
+function initDragAndDrop(filterText = '') {
+    const board = document.getElementById('roster-board'); if (!board) return; board.innerHTML = '';
+    SQUADS_CONFIG.forEach(sq => {
+        const card = document.createElement('div'); card.className = 'squad-card'; let rH = '';
+        sq.roles.forEach(role => {
+            const a = activePlayers.find(p => p.squad === sq.name && p.role === role);
+            const n = a ? `<span style="cursor:pointer; color:var(--accent-color); text-decoration:underline;" onclick="event.stopPropagation(); goToPlayerProfile(${a.id})" title="Перейти в базу">${a.nickname}</span>` : 'Свободно';
+            const c = a ? 'player-name' : 'empty-slot', id = a ? a.id : '';
+            const rB = (a && isAdmin) ? `<button class="btn btn-danger" style="padding: 2px 6px; font-size: 0.7em; margin-left: 5px;" onclick="event.stopPropagation(); removeFromSquad(${a.id})">➖</button>` : '';
+            const displayRole = role.replace(' 1', '').replace(' 2', '').replace(' 3', '');
+            rH += `<div class="role-slot" data-squad="${sq.name}" data-role="${role}" data-player-id="${id}" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleDrop(event, this)"><span>${displayRole}</span><span class="${c}">${n} ${rB}</span></div>`;
+        });
+        card.innerHTML = `<div class="squad-title">${sq.name}</div>${rH}`; board.appendChild(card);
+    });
+
+    const freeList = document.getElementById('free-players-list'); if (!freeList) return; freeList.innerHTML = '';
+    freeList.ondragover = (e) => e.preventDefault();
+    freeList.ondrop = async (e) => {
+        e.preventDefault(); if (!isAdmin) return; const id = e.dataTransfer.getData('text/plain');
+        if (id) { await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id); await loadAllData(); initDragAndDrop(); }
+    };
+    
+    const searchLower = filterText.toLowerCase().trim();
+    const free = activePlayers.filter(p => !p.squad && p.nickname.toLowerCase().includes(searchLower));
+    
+    if (free.length === 0) freeList.innerHTML = '<div style="text-align:center; color:#555;">Никого не найдено</div>';
+    else free.forEach(p => {
+        const i = document.createElement('div'); i.className = 'free-player-item'; i.draggable = isAdmin;
+        i.ondragstart = (e) => { e.dataTransfer.setData('text/plain', p.id); i.classList.add('dragging'); };
+        i.ondragend = () => i.classList.remove('dragging'); i.innerHTML = `<span>${p.nickname}</span>`; freeList.appendChild(i);
+    });
+}
+
+async function handleDrop(event, slot) {
+    event.preventDefault(); slot.classList.remove('drag-over'); if (!isAdmin) return;
+    const id = event.dataTransfer.getData('text/plain'), sq = slot.dataset.squad, role = slot.dataset.role, ex = slot.dataset.playerId;
+    if (!id) return; 
+    
+    if (ex && ex !== '') await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', ex);
+    await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id);
+    const { error } = await supabaseClient.from('players').update({ squad: sq, role: role }).eq('id', id);
+    
+    if (!error) { await loadAllData(); initDragAndDrop(); showToast('Игрок перемещен', 'success'); }
+}
+
+async function removeFromSquad(id) {
+    if (!isAdmin || !confirm('Убрать игрока из отряда?')) return;
+    await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id);
+    await loadAllData(); initDragAndDrop();
+}
+
+async function loadAttendance() {
+    const { data: p } = await supabaseClient.from('players').select('*'), { data: a } = await supabaseClient.from('attendance').select('*');
+    if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); } if (a) allAttendance = a;
+    let max = maxAttendanceStage; if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
+    maxAttendanceStage = max;
+    const s = document.getElementById('modal-stage'); if (s) { s.innerHTML = ''; for (let i = 1; i <= max; i++) { const o = document.createElement('option'); o.value = i; o.textContent = `Этап ${i}`; s.appendChild(o); } }
+    
+    const th = document.getElementById('attendance-thead'); if (!th) return;
+    let h = '<tr class="day-brackets-row"><th></th>', tC = Math.ceil(max / 3);
+    for (let t = 0; t < tC; t++) { const st = Math.min(3, max - t * 3); h += `<th colspan="${st}" style="border: 2px solid var(--accent-color); border-bottom: none; border-radius: var(--radius) var(--radius) 0 0; color: var(--accent-color); font-weight: bold; text-align: center;">ТУРНИР ${t + 1}</th>`; }
+    h += '</tr><tr><th>Боец</th>'; for (let i = 1; i <= max; i++) h += `<th>ЭТАП ${i}</th>`; th.innerHTML = h + '</tr>';
+    
+    const tb = document.getElementById('attendance-table-body'); if (!tb) return; tb.innerHTML = '';
+    const searchInput = document.getElementById('attendance-search');
+    const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const filteredPlayers = activePlayers.filter(p => p.nickname.toLowerCase().includes(searchQuery));
+
+    filteredPlayers.forEach(p => {
+        let row = `<tr><td>${p.nickname}</td>`;
+        for (let t = 1; t <= max; t++) {
+            const r = allAttendance.find(a => a.player_id === p.id && a.tournament_number === t); const st = r ? r.status : 'Не отмечен';
+            let c = st === 'Пришел' ? 'status-1' : (st === 'Не пришел' ? 'status-2' : (st === 'Отгул' ? 'status-3' : ''));
+            row += `<td><select class="${c}" ${!isAdmin ? 'disabled' : ''} onchange="updateAttendance(${p.id}, ${t}, this.value)"><option value="Не отмечен" ${st === 'Не отмечен' ? 'selected' : ''}>-</option><option value="Пришел" ${st === 'Пришел' ? 'selected' : ''}>Пришел</option><option value="Не пришел" ${st === 'Не пришел' ? 'selected' : ''}>Не пришел</option><option value="Отгул" ${st === 'Отгул' ? 'selected' : ''}>Отгул</option></select></td>`;
+        }
+        tb.innerHTML += row + '</tr>';
+    });
+}
+
+// ОБНОВЛЕННАЯ ФУНКЦИЯ СОХРАНЕНИЯ СТАТУСА (С ЗАЩИТОЙ ОТ СБРОСА)
+async function updateAttendance(id, t, s) {
+    if (!isAdmin) return;
+    
+    if (s === 'Не отмечен') {
+        await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t);
+    } else {
+        // Пытаемся обновить (upsert)
+        const { error } = await supabaseClient.from('attendance').upsert({ player_id: id, tournament_number: t, status: s }, { onConflict: 'player_id, tournament_number' });
+        
+        // Если ошибка (например, нет constraint), делаем вручную
+        if (error) {
+            console.error("Upsert failed, trying manual update", error);
+            const { data: existing } = await supabaseClient.from('attendance').select('id').eq('player_id', id).eq('tournament_number', t).single();
+            if (existing) {
+                await supabaseClient.from('attendance').update({ status: s }).eq('id', existing.id);
+            } else {
+                await supabaseClient.from('attendance').insert({ player_id: id, tournament_number: t, status: s });
+            }
+        }
+    }
+    
+    // Обновляем данные локально, чтобы UI не мигал
+    const localRec = allAttendance.find(a => a.player_id === id && a.tournament_number === t);
+    if (localRec) localRec.status = s;
+    
+    loadAttendance();
+    if (document.getElementById('tab-missed').classList.contains('active')) loadAllMissed();
+}
+
+function addTournament() { maxAttendanceStage += 3; loadAttendance(); }
+async function deleteTournament() {
+    if (maxAttendanceStage <= 3 || !confirm(`Удалить последний турнир?`)) return;
+    for (let i = maxAttendanceStage; i > maxAttendanceStage - 3; i--) await supabaseClient.from('attendance').delete().eq('tournament_number', i);
+    maxAttendanceStage -= 3; loadAttendance();
+}
+
+async function loadAllMissed() {
+    const tbody = document.getElementById('missed-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Загрузка...</td></tr>';
+
+    const { data, error } = await supabaseClient.from('attendance').select('*, players(nickname)').eq('status', 'Не пришел').order('tournament_number', { ascending: true });
+
+    if (error) { tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--danger-color);">Ошибка: ${error.message}</td></tr>`; return; }
+    if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--success-color);">Прогулов нет.</td></tr>'; return; }
+
+    const grouped = {};
+    data.forEach(item => {
+        const pId = item.player_id;
+        const nick = item.players ? item.players.nickname : 'Удаленный игрок';
+        if (!grouped[pId]) { grouped[pId] = { id: pId, nickname: nick, stages: [] }; }
+        grouped[pId].stages.push(item.tournament_number);
+    });
+
+    tbody.innerHTML = '';
+    const sortedPlayers = Object.values(grouped).sort((a, b) => b.stages.length - a.stages.length);
+
+    sortedPlayers.forEach(p => {
+        const groupedStages = {};
+        p.stages.forEach(s => {
+            const tourney = Math.ceil(s / 3);
+            const stageInTourney = s % 3 === 0 ? 3 : s % 3;
+            if (!groupedStages[tourney]) groupedStages[tourney] = [];
+            groupedStages[tourney].push({ globalStage: s, stageInTourney: stageInTourney });
+        });
+
+        const stagesHtml = Object.keys(groupedStages).map(t => {
+            const stagesList = groupedStages[t].sort((a,b)=>a.stageInTourney-b.stageInTourney).map(item => {
+                return `<div style="display: inline-flex; align-items: center; gap: 5px; background: var(--input-bg); padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--border-color); margin-right: 10px; margin-bottom: 5px;">
+                    <span style="font-size: 0.85em; color: var(--text-muted);">Э${item.stageInTourney}:</span>
+                    <select class="missed-select" style="padding: 2px 5px; border: none; background: transparent; color: var(--accent-color); outline: none; cursor: pointer; font-size: 0.85em;" onchange="updateMissedStatus(${p.id}, ${item.globalStage}, this.value)">
+                        <option value="Не пришел" selected>Не пришел</option>
+                        <option value="Отгул">Отгул</option>
+                        <option value="Пришел">Пришел</option>
+                        <option value="Удалить">Удалить</option>
+                    </select>
+                </div>`;
+            }).join('');
+            return `<div style="display: flex; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
+                        <div style="font-weight: bold; color: var(--text-muted); min-width: 90px;">Турнир ${t}:</div>
+                        <div style="display: flex; flex-wrap: wrap;">${stagesList}</div>
+                    </div>`;
+        }).join('');
+
+        tbody.innerHTML += `
+            <tr>
+                <td style="vertical-align: top; padding-top: 15px;"><strong>${p.nickname}</strong></td>
+                <td style="vertical-align: top; padding-top: 15px; color: var(--danger-color); font-weight: bold; text-align: center; font-size: 1.2em;">${p.stages.length}</td>
+                <td style="text-align: left; line-height: 1.4; padding: 10px;">${stagesHtml}</td>
+            </tr>
+        `;
+    });
+}
+
+async function updateMissedStatus(playerId, globalStage, newStatus) {
+    if (!isAdmin) return;
+    if (newStatus === 'Удалить') { 
+        await supabaseClient.from('attendance').delete().eq('player_id', playerId).eq('tournament_number', globalStage); 
+    } else { 
+        await supabaseClient.from('attendance').upsert({ player_id: playerId, tournament_number: globalStage, status: newStatus }, { onConflict: 'player_id, tournament_number' }); 
+    }
+    
+    await loadAllMissed();
+    if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
+    showToast('Статус обновлен', 'success');
+}
+
+async function loadMatchStats() {
+    const { data: p } = await supabaseClient.from('players').select('*'), { data: s } = await supabaseClient.from('match_stats').select('*');
+    if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); }
+    
+    const th = document.getElementById('stats-thead'); if (!th) return;
+    let max = maxAttendanceStage; 
+    if (s && s.length > 0) { const m = Math.max(...s.map(x => x.stage_number)); if (m > max) max = m; }
+    
+    let h = '<tr><th rowspan="2" style="vertical-align: middle;">Боец</th>';
+    let tC = Math.ceil(max / 3);
+    for (let t = 0; t < tC; t++) { const st = Math.min(3, max - t * 3); h += `<th colspan="${st * 4}" style="border-bottom: 1px solid var(--border-color); text-align:center;">ТУРНИР ${t + 1}</th>`; }
+    h += '</tr><tr>';
+    for (let i = 1; i <= max; i++) h += `<th colspan="4" style="text-align:center; color:var(--accent-color);">ЭТАП ${i}</th>`;
+    h += '</tr><tr><th></th>'; 
+    for (let i = 1; i <= max; i++) h += `<th style="font-size:0.75em; color:var(--text-muted);">K</th><th style="font-size:0.75em; color:var(--text-muted);">D</th><th style="font-size:0.75em; color:var(--text-muted);">A</th><th style="font-size:0.75em; color:var(--text-muted);">PTS</th>`;
+    h += '</tr>';
+    th.innerHTML = h;
+
+    const tb = document.getElementById('stats-tbody'); if (!tb) return; tb.innerHTML = '';
+    const searchInput = document.getElementById('stats-search');
+    const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const filteredPlayers = activePlayers.filter(p => p.nickname.toLowerCase().includes(searchQuery));
+
+    filteredPlayers.forEach(p => {
+        let row = `<tr><td>${p.nickname}</td>`;
+        for (let i = 1; i <= max; i++) {
+            const r = s ? s.find(x => x.player_id === p.id && x.stage_number === i) : null;
+            row += `<td><input type="number" id="s-k-${p.id}-${i}" value="${r ? r.kills : ''}" onchange="updateMatchStat(${p.id}, ${i}, 'kills', this.value)" style="width:45px;"></td>
+                <td><input type="number" id="s-d-${p.id}-${i}" value="${r ? r.deaths : ''}" onchange="updateMatchStat(${p.id}, ${i}, 'deaths', this.value)" style="width:45px;"></td>
+                <td><input type="number" id="s-a-${p.id}-${i}" value="${r ? r.assists : ''}" onchange="updateMatchStat(${p.id}, ${i}, 'assists', this.value)" style="width:45px;"></td>
+                <td><input type="number" id="s-p-${p.id}-${i}" value="${r ? r.points : ''}" onchange="updateMatchStat(${p.id}, ${i}, 'points', this.value)" style="width:55px;"></td>`;
+        }
+        tb.innerHTML += row + '</tr>';
+    });
+}
+
+async function updateMatchStat(playerId, stageNum, field, value) {
+    if (!isAdmin) return;
+    const numVal = parseInt(value) || 0;
+    const { data: existing } = await supabaseClient.from('match_stats').select('*').eq('player_id', playerId).eq('stage_number', stageNum).single();
+    
+    let payload = { player_id: playerId, stage_number: stageNum };
+    if (existing) payload = { ...existing, [field]: numVal };
+    else {
+        payload.kills = field === 'kills' ? numVal : 0; payload.deaths = field === 'deaths' ? numVal : 0;
+        payload.assists = field === 'assists' ? numVal : 0; payload.points = field === 'points' ? numVal : 0;
+    }
+    await supabaseClient.from('match_stats').upsert(payload, { onConflict: 'player_id, stage_number' });
+    await recalculatePlayerStats(playerId);
+}
+
+async function recalculatePlayerStats(playerId) {
+    if (!playerId) return;
+    const { data: stats } = await supabaseClient.from('match_stats').select('*').eq('player_id', playerId);
+    if (stats && stats.length > 0) {
+        let tK = 0, tD = 0, tA = 0, tP = 0;
+        stats.forEach(s => { tK += s.kills || 0; tD += s.deaths || 0; tA += s.assists || 0; tP += s.points || 0; });
+        let kd = tD === 0 ? tK : (tK / tD), kda = tD === 0 ? (tK + tA) : ((tK + tA) / tD);
+        kd = Math.round(kd * 100) / 100; kda = Math.round(kda * 100) / 100;
+        
+        await supabaseClient.from('players').update({ kd: kd, kda: kda, points: tP }).eq('id', playerId);
+        const p = allPlayers.find(x => x.id === playerId);
+        if (p) { p.kd = kd; p.kda = kda; p.points = tP; }
+        renderTops();
+    }
+}
+
+function addStage() { maxAttendanceStage += 3; loadMatchStats(); }
+function deleteStage() {
+    if (maxAttendanceStage <= 3 || !confirm(`Удалить последний турнир?`)) return;
+    maxAttendanceStage -= 3; loadMatchStats();
+}
+
+// ==================== ЛОГИКА СРАВНЕНИЯ (ДО 4 ЧЕЛОВЕК) ====================
+function initCompareTab() {
+    const select = document.getElementById('compare-players');
+    const periodSelect = document.getElementById('compare-period');
+    if (!select || !periodSelect) return;
+
+    if (select.tomselect) select.tomselect.destroy();
+    if (periodSelect.tomselect) periodSelect.tomselect.destroy();
+
+    let options = '';
+    activePlayers.forEach(p => { options += `<option value="${p.id}">${p.nickname}</option>`; });
+    select.innerHTML = options;
+
+    new TomSelect(select, { 
+        create: false, 
+        sortField: { field: "text", direction: "asc" }, 
+        maxItems: 4, 
+        plugins: ['remove_button'],
+        onChange: () => renderComparison() 
+    });
+    
+    new TomSelect(periodSelect, {
+        create: false, onChange: () => renderComparison()
+    });
+}
+
+function renderComparison() {
+    const selectEl = document.getElementById('compare-players');
+    const container = document.getElementById('compare-results');
+    if (!selectEl || !selectEl.tomselect) return;
+
+    const selectedIds = Array.from(selectEl.tomselect.getValue());
+    
+    if (selectedIds.length < 2) { 
+        container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding: 20px; text-transform: uppercase;">Выберите хотя бы двух бойцов</div>'; 
+        return; 
+    }
+
+    const players = selectedIds.map(id => allPlayers.find(p => p.id == id)).filter(Boolean);
+
+    let thead = '<thead><tr><th>Характеристика</th>';
+    players.forEach(p => { thead += `<th>${p.nickname} ${p.squad ? `<br><small style="color:var(--text-muted)">${p.squad}</small>` : ''}</th>`; });
+    thead += '</tr></thead>';
+
+    const stats = [
+        { label: 'КД (K/D)', key: 'kd', higher: true },
+        { label: 'КДА (KDA)', key: 'kda', higher: true },
+        { label: 'Очки', key: 'points', higher: true },
+        { label: 'Кувалда', key: 'has_sledgehammer', isBool: true },
+        { label: 'Автомат', key: 'main_rifle' },
+        { label: 'ПП', key: 'main_smg' },
+        { label: 'Снайперка', key: 'sniper' },
+        { label: 'Пистолет', key: 'secondary_pistol' },
+        { label: 'Пулемет', key: 'machine_gun' },
+        { label: 'Дробовик', key: 'shotgun' },
+        { label: 'Боевая броня', key: 'armor_combat' },
+        { label: 'Комбинированная', key: 'armor_combined' },
+    ];
+
+    let tbody = '<tbody>';
+    stats.forEach(stat => {
+        tbody += `<tr><td>${stat.label}</td>`;
+        
+        let bestVal = null;
+        if (stat.higher) {
+            bestVal = Math.max(...players.map(p => stat.isBool ? (p[stat.key] ? 1 : 0) : (parseFloat(p[stat.key]) || 0)));
+        }
+
+        players.forEach(p => {
+            let val = p[stat.key];
+            if (stat.isBool) {
+                tbody += `<td>${val ? '<span class="compare-winner">🔨 Есть</span>' : '<span class="compare-loser">❌ Нет</span>'}</td>`;
+            } else if (stat.higher) {
+                let numVal = parseFloat(val) || 0;
+                let isWinner = numVal === bestVal && players.filter(x => (parseFloat(x[stat.key]) || 0) === bestVal).length < players.length;
+                tbody += `<td class="${isWinner ? 'compare-winner' : ''}">${val !== null && val !== undefined && val !== '' ? val : '-'}</td>`;
+            } else {
+                tbody += `<td>${val !== null && val !== undefined && val !== '' ? val : '-'}</td>`;
+            }
+        });
+        tbody += '</tr>';
+    });
+    tbody += '</tbody>';
+
+    container.innerHTML = `<table class="compare-table">${thead}${tbody}</table>`;
+}
+// =======================================================================
+
+async function loadMatchHistory() {
+    const timeline = document.getElementById('history-timeline');
+    if (!timeline) return;
+    timeline.innerHTML = '<div style="text-align:center; width:100%;">Загрузка...</div>';
+
+    const { data: matches } = await supabaseClient.from('clan_matches').select('*').order('match_date', { ascending: true });
+    
+    let wins = 0, losses = 0, draws = 0;
+    let totalRating = 1000;
+    let totalGears = 0;
+    
+    if (!matches || matches.length === 0) {
+        timeline.innerHTML = '<div style="text-align:center; width:100%;">Нет сохраненных матчей</div>';
+        renderHistoryChart(0, 0, 0);
+        updateHistoryStats(1000, 'E', 0, 0, 0, 0);
+        return;
+    }
+
+    const filteredMatches = matches.filter(m => filterBySeason(Math.ceil((m.stage_number || 0) / 3)));
+
+    filteredMatches.forEach(match => {
+        const cScore = match.clan_score || 0;
+        const eScore = match.enemy_points || 0;
+        
+        if (cScore > eScore) {
+            const currentTier = getTierData(totalRating);
+            totalRating += 50;
+            totalGears += currentTier.winGears;
+            wins++;
+        } else if (cScore < eScore) {
+            const currentTier = getTierData(totalRating);
+            totalRating -= 50;
+            if (cScore >= (eScore * 0.2)) {
+                totalGears += currentTier.lossGears;
+            }
+            losses++;
+        } else {
+            draws++;
+        }
+    });
+
+    const finalTier = getTierData(totalRating);
+    updateHistoryStats(totalRating, finalTier.name, totalGears, wins, losses, draws);
+
+    timeline.innerHTML = '';
+    const reversedMatches = [...filteredMatches].reverse();
+    let simRating = 1000;
+    let simWins = 0, simLosses = 0, simDraws = 0;
+    let simGears = 0;
+    
+    // Для правильного отображения гильз восстанавливаем историю с начала
+    [...filteredMatches].forEach(m => {
+        const cS = m.clan_score || 0;
+        const eS = m.enemy_points || 0;
+        if (cS > eS) { simGears += getTierData(simRating).winGears; simRating += 50; }
+        else if (cS < eS) { if (cS >= (eS * 0.2)) simGears += getTierData(simRating).lossGears; simRating -= 50; }
+    });
+
+    let currentCalcRating = 1000;
+    
+    reversedMatches.forEach((match, index) => {
+        const isLeft = index % 2 === 0;
+        const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const cScore = match.clan_score || 0;
+        const eScore = match.enemy_points || 0;
+        const opponent = match.enemy_name || 'Неизвестный враг';
+        const mapName = match.map_name || 'Не указана';
+
+        let scoreClass = '';
+        let winText = '';
+        let gearsEarned = 0;
+        const tierAtMatch = getTierData(currentCalcRating);
+
+        if (cScore > eScore) { 
+            scoreClass = 'score-win'; winText = 'ПОБЕДА'; 
+            gearsEarned = tierAtMatch.winGears;
+            currentCalcRating += 50;
+        }
+        else if (cScore < eScore) { 
+            scoreClass = 'score-loss'; winText = 'ПОРАЖЕНИЕ'; 
+            if (cScore >= (eScore * 0.2)) gearsEarned = tierAtMatch.lossGears;
+            currentCalcRating -= 50;
+        }
+        else { winText = 'НИЧЬЯ'; }
+
+        const adminEdit = isAdmin ? `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 10px;">
+                <input type="date" value="${match.match_date || ''}" onchange="updateMatchData(${match.id}, 'date', this.value)" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
+                <input type="text" value="${opponent}" onchange="updateMatchData(${match.id}, 'enemy_name', this.value)" placeholder="Имя врага" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
+                
+                <select onchange="updateMatchData(${match.id}, 'map_name', this.value)" style="background:var(--input-bg); color:#ff9800; border:1px solid var(--border-color); padding:5px; border-radius:4px; font-weight:bold; width:100%;">
+                    <option value="">-- Выберите карту --</option>
+                    <option value="Низина" ${match.map_name === 'Низина' ? 'selected' : ''}>Низина</option>
+                    <option value="Малая Бердовка" ${match.map_name === 'Малая Бердовка' ? 'selected' : ''}>Малая Бердовка</option>
+                    <option value="Хвойный" ${match.map_name === 'Хвойный' ? 'selected' : ''}>Хвойный</option>
+                </select>
+
+                <div style="display:flex; gap:5px;">
+                    <input type="number" value="${cScore}" onchange="updateMatchData(${match.id}, 'clan_score', this.value)" placeholder="Наши очки" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
+                    <input type="number" value="${eScore}" onchange="updateMatchData(${match.id}, 'enemy_points', this.value)" placeholder="Очки врага" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:5px; border-radius:4px;">
+                </div>
+                <button class="btn btn-danger" style="padding: 5px; font-size: 0.8em;" onclick="deleteMatch(${match.id})">Удалить матч</button>
+            </div>
+        ` : '';
+
+        const stageBadge = match.stage_number ? `<div style="font-size:0.8em; color:var(--accent-color); margin-bottom:5px;">Этап ${match.stage_number}</div>` : '';
+        const mapBadge = `<div style="font-size:0.85em; color:#9cdcfe; margin-bottom:5px;">🗺️ ${mapName}</div>`;
+        const gearsBadge = gearsEarned > 0 ? `<div style="color:#9cdcfe; font-size:0.9em; margin-top:5px; font-weight:bold;">+ ${gearsEarned} гильз</div>` : '';
+
+        timeline.innerHTML += `
+            <div class="timeline-item ${isLeft ? 'left' : 'right'}">
+                <div class="timeline-content">
+                    ${stageBadge}
+                    ${mapBadge}
+                    <div class="timeline-date">${dateStr}</div>
+                    <div class="timeline-opponent">vs <strong>${opponent}</strong></div>
+                    <div class="timeline-score ${scoreClass}">${cScore} : ${eScore}</div>
+                    <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${winText}</div>
+                    ${gearsBadge}
+                    ${adminEdit}
+                </div>
+            </div>
+        `;
+    });
+
+    renderHistoryChart(wins, losses, draws);
+}
+
+function updateHistoryStats(rating, tierName, gears, wins, losses, draws) {
+    const ratingEl = document.getElementById('hr-rating'); if (ratingEl) ratingEl.innerText = rating;
+    const tierEl = document.getElementById('hr-tier'); if (tierEl) tierEl.innerText = tierName + ' Тир';
+    const gearsEl = document.getElementById('hr-gears'); if (gearsEl) gearsEl.innerText = gears;
+
+    const total = wins + losses + draws;
+    const winPct = total > 0 ? Math.round((wins / total) * 100) : 0;
+    const lossPct = total > 0 ? Math.round((losses / total) * 100) : 0;
+    const drawPct = total > 0 ? Math.round((draws / total) * 100) : 0;
+
+    const hrWins = document.getElementById('hr-wins'); if (hrWins) hrWins.innerText = wins;
+    const hrLosses = document.getElementById('hr-losses'); if (hrLosses) hrLosses.innerText = losses;
+    const hrDraws = document.getElementById('hr-draws'); if (hrDraws) hrDraws.innerText = draws;
+    const hrTotal = document.getElementById('hr-total'); if (hrTotal) hrTotal.innerText = total;
+
+    const hrWinsPct = document.getElementById('hr-wins-pct'); if (hrWinsPct) hrWinsPct.innerText = winPct + '%';
+    const hrLossesPct = document.getElementById('hr-losses-pct'); if (hrLossesPct) hrLossesPct.innerText = lossPct + '%';
+    const hrDrawsPct = document.getElementById('hr-draws-pct'); if (hrDrawsPct) hrDrawsPct.innerText = drawPct + '%';
+}
+
+async function addMatchHistory() {
+    const date = prompt("Введите дату матча (ГГГГ-ММ-ДД):", new Date().toISOString().split('T')[0]);
+    if (!date) return;
+    
+    const { error } = await supabaseClient.from('clan_matches').insert([{ match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Новый враг', map_name: 'Низина' }]);
+    if (error) showToast('Ошибка: ' + error.message, 'error');
+    else { showToast('Матч добавлен', 'success'); loadMatchHistory(); }
+}
+
+async function updateMatchData(id, field, value) {
+    if (!isAdmin) return;
+    let val = value;
+    if (field === 'clan_score' || field === 'enemy_points') val = parseInt(value) || 0;
+    
+    const { error } = await supabaseClient.from('clan_matches').update({ [field]: val }).eq('id', id);
+    if (error) showToast('Ошибка: ' + error.message, 'error');
+    else { showToast('Данные обновлены', 'success'); loadMatchHistory(); }
+}
+
+async function deleteMatch(id) {
+    if (!isAdmin || !confirm('Удалить этот матч?')) return;
+    const { error } = await supabaseClient.from('clan_matches').delete().eq('id', id);
+    if (error) showToast('Ошибка: ' + error.message, 'error');
+    else { showToast('Матч удален', 'success'); loadMatchHistory(); }
+}
+
+function renderHistoryChart(wins, losses, draws = 0) {
+    const canvas = document.getElementById('matchHistoryChart');
+    if (!canvas) return;
+
+    if (myChart) { myChart.destroy(); }
+
+    const hasData = wins > 0 || losses > 0 || draws > 0;
+    
+    myChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: ['Победы', 'Поражения', 'Ничьи'],
+            datasets: [{
+                data: hasData ? [wins, losses, draws] : [1, 0, 0],
+                backgroundColor: hasData ? ['#4caf50', '#e53935', '#ff9800'] : ['#2a3a2a', '#2a3a2a', '#2a3a2a'],
+                borderColor: '#0d0f0d',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#d1d5d1', font: { family: 'Courier New', weight: 'bold' } } },
+                tooltip: { enabled: hasData }
+            },
+            cutout: '70%'
+        }
+    });
+}
+
+// ==================== КАЛЕНДАРЬ ====================
+async function loadCalendar() {
+    const list = document.getElementById('calendar-list');
+    if (!list) return;
+    list.innerHTML = 'Загрузка...';
+
+    const { data: events } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('match_time', { ascending: true }).order('tournament_number', { ascending: true });
+    const { data: matches } = await supabaseClient.from('clan_matches').select('stage_number');
+    
+    let maxStage = 0;
+    if (matches && matches.length > 0) { maxStage = Math.max(...matches.map(m => m.stage_number || 0)); }
+    const maxTourney = Math.ceil(maxStage / 3) || 0;
+    
+    const startTourneyInput = document.getElementById('bulk-start-tournament');
+    if (startTourneyInput) startTourneyInput.value = maxTourney + 1;
+
+    const filteredEvents = (events || []).filter(e => filterBySeason(e.tournament_number || 0));
+
+    if (filteredEvents.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет запланированных турниров в этом сезоне</div>';
+        return;
+    }
+
+    const grouped = {};
+    filteredEvents.forEach(e => {
+        const key = `${e.match_date}_${e.tournament_number}_${e.match_time}`;
+        if (!grouped[key]) {
+            grouped[key] = {
+                date: e.match_date,
+                time: e.match_time,
+                tourney: e.tournament_number,
+                notes: e.notes,
+                stages: [],
+                ids: []
+            };
+        }
+        if (e.stage_number) grouped[key].stages.push(e.stage_number);
+        grouped[key].ids.push(e.id);
+    });
+
+    list.innerHTML = '';
+    Object.values(grouped).forEach(g => {
+        const dateStr = g.date ? new Date(g.date).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const timeStr = g.time ? g.time.slice(0, 5) : '';
+        const stagesStr = g.stages.length > 0 ? g.stages.sort((a,b)=>a-b).join(', ') : '-';
+        const idsStr = g.ids.join(',');
+
+        list.innerHTML += `
+            <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <div style="color:var(--accent-color); font-weight:bold; font-size:1.2em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''}</div>
+                    <div style="margin-top:5px; display:flex; gap:15px; flex-wrap:wrap;">
+                        <span>Турнир: <strong>${g.tourney || '-'}</strong></span>
+                        <span>Этапы: <strong>${stagesStr}</strong></span>
+                    </div>
+                    <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${g.notes || ''}</div>
+                </div>
+                ${isAdmin ? `<button class="btn btn-danger" style="padding: 8px 15px;" onclick="deleteCalendarEvents([${idsStr}])">X</button>` : ''}
+            </div>
+        `;
+    });
+}
+
+async function addUpcomingMatch() {
+    if (!isAdmin) return;
+    const date = document.getElementById('cal-date').value;
+    const time = document.getElementById('cal-time').value;
+    const tourney = parseInt(document.getElementById('cal-tournament').value) || null;
+    const stage = parseInt(document.getElementById('cal-stage').value) || null;
+    const notes = document.getElementById('cal-notes').value.trim();
+
+    if (!date) return showToast('Выберите дату', 'error');
+
+    const { error } = await supabaseClient.from('clan_calendar').insert([{
+        match_date: date,
+        match_time: time || null,
+        tournament_number: tourney,
+        stage_number: stage,
+        notes: notes
+    }]);
+
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    showToast('Турнир добавлен в календарь', 'success');
+    loadCalendar();
+}
+
+async function generateBulkCalendar() {
+    if (!isAdmin) return;
+    const startStr = document.getElementById('bulk-start').value;
+    const endStr = document.getElementById('bulk-end').value;
+    const time = document.getElementById('bulk-time').value;
+    const notes = document.getElementById('bulk-notes').value.trim();
+    
+    let startTourney = parseInt(document.getElementById('bulk-start-tournament').value) || 1;
+    
+    if (!startStr || !endStr) return showToast('Укажите даты начала и конца', 'error');
+    
+    const selectedDays = Array.from(document.querySelectorAll('.bulk-day:checked')).map(cb => parseInt(cb.value));
+    if (selectedDays.length === 0) return showToast('Выберите хотя бы один день недели', 'error');
+    
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerText = 'Генерация...';
+
+    let current = new Date(startStr);
+    const end = new Date(endStr);
+    const events = [];
+    let currentTourney = startTourney;
+    
+    while (current <= end) {
+        if (selectedDays.includes(current.getDay())) {
+            const year = current.getFullYear();
+            const month = String(current.getMonth() + 1).padStart(2, '0');
+            const day = String(current.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            
+            for (let stageNum = 1; stageNum <= 3; stageNum++) {
+                events.push({
+                    match_date: dateStr,
+                    match_time: time || null,
+                    tournament_number: currentTourney,
+                    stage_number: stageNum,
+                    notes: notes
+                });
+            }
+            currentTourney++; 
+        }
+        current.setDate(current.getDate() + 1);
+    }
+    
+    if (events.length === 0) {
+        btn.disabled = false;
+        btn.innerText = 'Сгенерировать события';
+        return showToast('В выбранном диапазоне нет подходящих дней', 'info');
+    }
+    
+    const { error } = await supabaseClient.from('clan_calendar').insert(events);
+    
+    btn.disabled = false;
+    btn.innerText = 'Сгенерировать события';
+    
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    
+    showToast(`Успешно добавлено ${events.length / 3} турниров (${events.length} этапов)!`, 'success');
+    document.getElementById('bulk-start').value = '';
+    document.getElementById('bulk-end').value = '';
+    loadCalendar();
+}
+
+async function deleteCalendarEvents(ids) {
+    if (!isAdmin || !confirm('Удалить все этапы этого турнира?')) return;
+    for (const id of ids) {
+        await supabaseClient.from('clan_calendar').delete().eq('id', id);
+    }
+    loadCalendar();
+    showToast('Турнир удален из календаря', 'success');
+}
+// ==================================================
+
+async function loadFines() {
+    const { data } = await supabaseClient.from('fines').select('*, players(nickname)').order('created_at', { ascending: false });
+    if (data) { allFines = data; const tb = document.getElementById('fines-table-body'); if (!tb) return;
+        tb.innerHTML = allFines.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Нет штрафов</td></tr>' : '';
+        allFines.forEach(f => { tb.innerHTML += `<tr><td><strong>${f.players?.nickname || 'Неизвестный'}</strong></td><td>${f.reason}</td><td style="color:var(--danger-color);">${f.amount} ₽</td><td class="${f.status === 'open' ? 'status-open' : 'status-closed'}">${f.status === 'open' ? 'Открыт' : 'Закрыт'}</td><td><button class="btn" onclick="toggleFineStatus(${f.id}, '${f.status}')">${f.status === 'open' ? 'Закрыть' : 'Открыть'}</button><button class="btn btn-danger" onclick="deleteFine(${f.id})">X</button></td></tr>`; });
+    }
+}
+
+async function addFine() {
+    const pid = document.getElementById('fine-player').value, r = document.getElementById('fine-reason').value.trim(), a = parseInt(document.getElementById('fine-amount').value) || 0;
+    if (!pid || !r) return showToast('Выберите игрока и укажите причину', 'error');
+    const { error } = await supabaseClient.from('fines').insert([{ player_id: pid, reason: r, amount: a, status: 'open' }]);
+    if (error) showToast('Ошибка: ' + error.message, 'error'); 
+    else { showToast('Штраф добавлен', 'success'); document.getElementById('fine-reason').value = ''; document.getElementById('fine-amount').value = ''; loadFines(); }
+}
+
+async function toggleFineStatus(id, st) { await supabaseClient.from('fines').update({ status: st === 'open' ? 'closed' : 'open' }).eq('id', id); loadFines(); }
+async function deleteFine(id) { if (confirm('Удалить штраф?')) { await supabaseClient.from('fines').delete().eq('id', id); loadFines(); } }
+
+function openPhotoModal(input) {
+    const file = input.files[0]; if (!file) return;
+    currentPhotoFile = file; document.getElementById('photo-modal').style.display = 'flex';
+    const r = new FileReader(); r.onload = (e) => { document.getElementById('preview-img').src = e.target.result; document.getElementById('photo-preview').style.display = 'block'; }; r.readAsDataURL(file);
+}
+
+function closePhotoModal() {
+    document.getElementById('photo-modal').style.display = 'none'; document.getElementById('attendance-photo').value = '';
+    document.getElementById('photo-preview').style.display = 'none'; currentPhotoFile = null;
+}
+
+async function saveAbsentStatuses() {
+    const btn = document.getElementById('save-absent-btn');
+    btn.disabled = true; btn.innerText = '...';
+
+    for (const p of pendingAbsentPlayers) {
+        const sel = document.getElementById(`absent-status-${p.id}`);
+        const status = sel ? sel.value : 'Не пришел';
+        await supabaseClient.from('attendance').upsert({ player_id: p.id, tournament_number: currentAbsentStage, status: status }, { onConflict: 'player_id, tournament_number' });
+    }
+
+    document.getElementById('absent-modal').style.display = 'none';
+    document.getElementById('photo-status').innerHTML = `СТАТУСЫ ОБНОВЛЕНЫ.`;
+    
+    await loadAllData();
+    if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
+    if (document.getElementById('tab-stats').classList.contains('active')) loadMatchStats();
+    if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
+    if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
+    
+    btn.disabled = false; btn.innerText = 'ПОДТВЕРДИТЬ';
+    showToast('Статусы сохранены!', 'success');
+}
+
+async function confirmPhotoUpload() {
+    if (!currentPhotoFile) return;
+    const stageNum = parseInt(document.getElementById('modal-stage').value), statusDiv = document.getElementById('photo-status');
+    document.getElementById('photo-modal').style.display = 'none'; statusDiv.innerHTML = 'РАСПОЗНАЕМ...';
+
+    const compressImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image(); img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200;
+                    const scale = MAX_WIDTH / img.width; canvas.width = MAX_WIDTH; canvas.height = img.height * scale;
+                    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+                };
+            };
+        });
+    };
+
+    const normalizeStr = (str) => {
+        if (!str) return '';
+        return str.toLowerCase().replace(/[\s\-_.,'"]/g, '').replace(/[а]/g, 'a').replace(/[е]/g, 'e').replace(/[о]/g, 'o').replace(/[р]/g, 'p').replace(/[с]/g, 'c').replace(/[у]/g, 'y').replace(/[х]/g, 'x').replace(/[к]/g, 'k').replace(/[м]/g, 'm').replace(/[т]/g, 't').replace(/[в]/g, 'b').replace(/[н]/g, 'h');
+    };
+
+    const levenshtein = (a, b) => {
+        if (a.length === 0) return b.length; if (b.length === 0) return a.length;
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1];
+                else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+            }
+        }
+        return matrix[b.length][a.length];
+    };
+
+    const findPlayerSmart = (aiNickname) => {
+        if (!aiNickname) return null;
+        const aiClean = normalizeStr(aiNickname);
+        let found = activePlayers.find(p => normalizeStr(p.nickname) === aiClean);
+        if (found) return found;
+        let bestMatch = null, bestDistance = Infinity;
+        activePlayers.forEach(p => {
+            const dbClean = normalizeStr(p.nickname);
+            if ((dbClean.includes(aiClean) || aiClean.includes(dbClean)) && Math.abs(dbClean.length - aiClean.length) <= 3) { bestMatch = p; bestDistance = 0; return; }
+            const distance = levenshtein(dbClean, aiClean);
+            const maxAllowedDist = aiClean.length > 6 ? 2 : 1;
+            if (distance <= maxAllowedDist && distance < bestDistance) { bestDistance = distance; bestMatch = p; }
+        });
+        return bestMatch;
+    };
+
+    try {
+        const base64 = await compressImage(currentPhotoFile);
+        const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/recognize', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` }, body: JSON.stringify({ image: base64 }) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        const result = await res.json();
+        
+        if (result.players && result.players.length > 0) {
+            let added = 0, notFound = [], presentPlayerIds = new Set();
+            for (const p of result.players) {
+                const pl = findPlayerSmart(p.nickname);
+                if (pl) {
+                    presentPlayerIds.add(pl.id);
+                    await supabaseClient.from('attendance').upsert({ player_id: pl.id, tournament_number: stageNum, status: 'Пришел' }, { onConflict: 'player_id, tournament_number' });
+                    await supabaseClient.from('match_stats').upsert({ player_id: pl.id, stage_number: stageNum, kills: p.kills || 0, deaths: p.deaths || 0, assists: p.assists || 0, points: p.points || 0 }, { onConflict: 'player_id, stage_number' });
+                    await recalculatePlayerStats(pl.id);
+                    added++;
+                } else { notFound.push(p.nickname); }
+            }
+
+            if (result.clan_score !== undefined && result.enemy_score !== undefined && result.clan_score > 0) {
+                const today = new Date().toISOString().split('T')[0];
+                const { error: matchError } = await supabaseClient.from('clan_matches').upsert({
+                    stage_number: stageNum,
+                    match_date: today,
+                    clan_score: result.clan_score,
+                    enemy_points: result.enemy_score,
+                    enemy_name: result.enemy_name || 'Неизвестный враг',
+                    map_name: result.map_name || 'Низина'
+                }, { onConflict: 'stage_number' });
+
+                if (!matchError) showToast(`Матч (Этап ${stageNum}) записан в Историю!`, 'info');
+            }
+
+            pendingAbsentPlayers = [];
+            activePlayers.forEach(pl => { if (!presentPlayerIds.has(pl.id)) pendingAbsentPlayers.push(pl); });
+
+            statusDiv.innerHTML = `ПРИШЛО: ${added}.`;
+            if (notFound.length > 0) statusDiv.innerHTML += `<br>НЕ НАЙДЕНЫ: ${notFound.join(', ')}`;
+
+            if (pendingAbsentPlayers.length > 0) {
+                currentAbsentStage = stageNum;
+                const listContainer = document.getElementById('absent-players-list'); listContainer.innerHTML = '';
+                pendingAbsentPlayers.forEach(p => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid var(--border-color); margin-bottom:5px;';
+                    row.innerHTML = `<span style="font-weight:bold;">${p.nickname}</span><select id="absent-status-${p.id}" style="padding:5px; border-radius:var(--radius); background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color);"><option value="Не пришел">Не пришел</option><option value="Отгул">Отгул</option></select>`;
+                    listContainer.appendChild(row);
+                });
+                document.getElementById('absent-modal').style.display = 'flex';
+                statusDiv.innerHTML += `<br>ПОДТВЕРДИТЕ СТАТУСЫ (${pendingAbsentPlayers.length})`;
+                showToast(`Распознано ${added} игроков`, 'info');
+            } else {
+                await loadAllData(); 
+                if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
+                if (document.getElementById('tab-stats').classList.contains('active')) loadMatchStats();
+                if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
+                if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
+                showToast(`Успешно распознано ${added} игроков!`, 'success');
+            }
+        } else { statusDiv.innerHTML = `НЕ УДАЛОСЬ РАСПОЗНАТЬ.`; showToast('Ошибка распознавания', 'error'); }
+    } catch (err) { console.error(err); statusDiv.innerHTML = `ОШИБКА: ${err.message}`; showToast('Ошибка нейросети', 'error'); }
+    closePhotoModal(); document.getElementById('attendance-photo').value = '';
+}
+
+async function loadAnalytics() {
+    const { data: players } = await supabaseClient.from('players').select('*'); 
+    if (!players) return;
+    const active = players.filter(p => !p.status || p.status ===  'в клане');
+    
+    const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10);
+    document.querySelector('#top-kd-table tbody').innerHTML = topKD.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kd}</td></tr>`).join('');
+    const topKDA = [...active].sort((a, b) => b.kda - a.kda).slice(0, 10);
+    document.querySelector('#top-kda-table tbody').innerHTML = topKDA.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kda}</td></tr>`).join('');
+    const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
+    document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
+    
+    document.getElementById('stat-total-players').innerText = active.length;
+    const inS = active.filter(p => p.squad && p.squad.trim() !== '').length;
+    document.getElementById('stat-in-squads').innerText = inS; document.getElementById('stat-free').innerText = active.length - inS;
+
+    if (active.length > 0) {
+        const sumKd = active.reduce((acc, p) => acc + (p.kd || 0), 0);
+        const sumKda = active.reduce((acc, p) => acc + (p.kda || 0), 0);
+        const sumPts = active.reduce((acc, p) => acc + (p.points || 0), 0);
+
+        document.getElementById('avg-kd-total').innerText = (sumKd / active.length).toFixed(2);
+        document.getElementById('avg-kda-total').innerText = (sumKda / active.length).toFixed(2);
+        document.getElementById('avg-points-total').innerText = Math.round(sumPts / active.length);
+
+        const { data: allStats } = await supabaseClient.from('match_stats').select('*');
+        if (allStats && allStats.length > 0) {
+            const activeIds = new Set(active.map(p => p.id));
+            const activeStats = allStats.filter(s => activeIds.has(s.player_id));
+            if (activeStats.length > 0) {
+                let totalKills = 0, totalDeaths = 0, totalAssists = 0, totalPoints = 0;
+                activeStats.forEach(s => {
+                    totalKills += s.kills || 0; totalDeaths += s.deaths || 0; totalAssists += s.assists || 0; totalPoints += s.points || 0;
+                });
+                let kdStage = totalDeaths === 0 ? totalKills : (totalKills / totalDeaths);
+                let kdaStage = totalDeaths === 0 ? (totalKills + totalAssists) : ((totalKills + totalAssists) / totalDeaths);
+                const stagesCount = Math.max(...activeStats.map(s => s.stage_number));
+                const avgPtsStage = totalPoints / stagesCount;
+
+                document.getElementById('avg-kd-stage').innerText = kdStage.toFixed(2);
+                document.getElementById('avg-kda-stage').innerText = kdaStage.toFixed(2);
+                document.getElementById('avg-points-stage').innerText = Math.round(avgPtsStage);
+            }
+        }
+    }
+
+    const mapStatsBody = document.querySelector('#map-stats-table tbody');
+    if (mapStatsBody) {
+        const { data: matches } = await supabaseClient.from('clan_matches').select('*');
+        if (matches && matches.length > 0) {
+            const filteredMatches = matches.filter(m => filterBySeason(Math.ceil((m.stage_number || 0) / 3)));
+            const mapData = {};
+            filteredMatches.forEach(m => {
+                const map = m.map_name ? m.map_name.trim() : 'Неизвестная';
+                if (!mapData[map]) mapData[map] = { games: 0, wins: 0 };
+                mapData[map].games++;
+                if (m.clan_score > m.enemy_points) mapData[map].wins++;
+            });
+            
+            const sortedMaps = Object.entries(mapData).sort((a, b) => b[1].games - a[1].games);
+            mapStatsBody.innerHTML = sortedMaps.map(([name, data]) => {
+                const wr = Math.round((data.wins / data.games) * 100);
+                const wrColor = wr >= 50 ? 'var(--success-color)' : 'var(--danger-color)';
+                return `<tr><td>${name}</td><td>${data.games}</td><td>${data.wins}</td><td style="color:${wrColor}; font-weight:bold;">${wr}%</td></tr>`;
+            }).join('');
+        } else {
+            mapStatsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных о картах</td></tr>';
+        }
+    }
+}
+
+async function loadPlayerNotes(playerId) {
+    const { data: notes, error } = await supabaseClient
+        .from('player_notes')
+        .select('*')
+        .eq('player_id', playerId)
+        .order('created_at', { ascending: false });
+
+    const coachList = document.getElementById('player-notes-list');
+    const tkList = document.getElementById('player-timekeeper-notes-list');
+    if (!coachList || !tkList) return;
+
+    if (error) {
+        coachList.innerHTML = `<div style="color:var(--danger-color); font-size:0.85em; text-align:center; padding:8px;">Ошибка: ${error.message}</div>`;
+        tkList.innerHTML = '';
+        return;
+    }
+
+    const coachNotes = (notes || []).filter(n => n.note_type === 'coach');
+    const tkNotes = (notes || []).filter(n => n.note_type === 'timekeeper');
+
+    const renderNotes = (arr) => arr.length === 0
+        ? '<div style="color:var(--text-muted); font-size:0.85em; text-align:center; padding:8px;">Заметок нет</div>'
+        : arr.map(n => {
+            const dateStr = n.created_at ? new Date(n.created_at).toLocaleDateString('ru-RU') : '';
+            return `
+            <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:var(--radius); padding:8px 10px; margin-bottom:6px; font-size:0.9em; display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+                <div style="flex:1; word-break:break-word;">
+                    <div style="color:var(--text-muted); font-size:0.75em; margin-bottom:3px;">${dateStr}</div>
+                    <div>${n.content}</div>
+                </div>
+                <button class="btn btn-danger" style="padding:2px 8px; font-size:0.75em;" onclick="deletePlayerNote(${n.id}, ${playerId})">✕</button>
+            </div>`;
+        }).join('');
+
+    coachList.innerHTML = renderNotes(coachNotes);
+    tkList.innerHTML = renderNotes(tkNotes);
+}
+
+async function addPlayerNote(type) {
+    if (!currentEditId) return showToast('Сначала выберите игрока', 'error');
+    const inputId = type === 'coach' ? 'player-note-input' : 'player-timekeeper-note-input';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return showToast('Введите текст заметки', 'error');
+
+    const { error } = await supabaseClient.from('player_notes').insert([{
+        player_id: currentEditId,
+        note_type: type,
+        content: content
+    }]);
+
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    input.value = '';
+    showToast('Заметка добавлена', 'success');
+    
+    const { data: notesData } = await supabaseClient.from('player_notes').select('*');
+    if (notesData) { allNotes = notesData; renderPlayerList(); }
+    
+    await loadPlayerNotes(currentEditId);
+}
+
+async function deletePlayerNote(noteId, playerId) {
+    if (!confirm('Удалить заметку?')) return;
+    const { error } = await supabaseClient.from('player_notes').delete().eq('id', noteId);
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    showToast('Заметка удалена', 'success');
+    
+    const { data: notesData } = await supabaseClient.from('player_notes').select('*');
+    if (notesData) { allNotes = notesData; renderPlayerList(); }
+
+    await loadPlayerNotes(playerId);
+}
+
+const ANALYTICS_CHANNEL_ID = '1567231595797028874';
+const ROSTER_CHANNEL_ID = '1567230953833627668';
+
+async function sendAnalyticsScreenshot() {
+    const { data: players } = await supabaseClient.from('players').select('*'); 
+    if (!players) return showToast('Нет данных для аналитики', 'error');
+    const active = players.filter(p => !p.status || p.status === 'в клане');
+    const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10);
+    const topKDA = [...active].sort((a, b) => b.kda - a.kda).slice(0, 10);
+    const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
+
+    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+    canvas.width = 1200; canvas.height = 680; 
+    ctx.fillStyle = '#0d0f0d'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    function drawTable(title, data, x, y, width, colTitle, fieldKey) {
+        ctx.fillStyle = '#1a201a'; ctx.beginPath(); ctx.roundRect(x, y, width, 375, 8); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+        ctx.fillStyle = '#ff9800'; ctx.font = 'bold 20px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(title, x + width / 2, y + 35);
+        ctx.fillStyle = '#7a857a'; ctx.font = 'bold 14px Segoe UI'; ctx.textAlign = 'left'; ctx.fillText('#', x + 25, y + 75); ctx.fillText('Боец', x + 70, y + 75);
+        ctx.textAlign = 'right'; ctx.fillText(colTitle, x + width - 25, y + 75); 
+        ctx.beginPath(); ctx.moveTo(x + 25, y + 90); ctx.lineTo(x + width - 25, y + 90); ctx.strokeStyle = '#2a3a2a'; ctx.stroke(); 
+        ctx.font = '14px Segoe UI';
+        data.forEach((p, i) => {
+            const rowY = y + 115 + i * 25; 
+            ctx.fillStyle = '#ff9800'; ctx.textAlign = 'left'; ctx.fillText(i + 1, x + 25, rowY); 
+            ctx.fillStyle = '#d1d5d1'; ctx.fillText(p.nickname, x + 70, rowY);
+            ctx.textAlign = 'right'; ctx.fillText(p[fieldKey] !== undefined ? p[fieldKey] : 0, x + width - 25, rowY);
+            if (i < data.length - 1) { ctx.beginPath(); ctx.moveTo(x + 25, rowY + 10); ctx.lineTo(x + width - 25, rowY + 10); ctx.strokeStyle = '#2a3a2a'; ctx.stroke(); }
+        });
+    }
+
+    drawTable('ТОП КД', topKD, 20, 20, 380, 'КД', 'kd');
+    drawTable('ТОП КДА', topKDA, 410, 20, 380, 'КДА', 'kda');
+    drawTable('ТОП ОЧКИ', topP, 800, 20, 380, 'Очки', 'points');
+
+    const sumKd = active.reduce((acc, p) => acc + (p.kd || 0), 0);
+    const sumKda = active.reduce((acc, p) => acc + (p.kda || 0), 0);
+    const sumPts = active.reduce((acc, p) => acc + (p.points || 0), 0);
+    const avgKdTotal = (sumKd / active.length || 0).toFixed(2);
+    const avgKdaTotal = (sumKda / active.length || 0).toFixed(2);
+    const avgPtsTotal = Math.round(sumPts / active.length) || 0;
+
+    let avgKdStage = '0.00', avgKdaStage = '0.00', avgPtsStage = '0';
+    const { data: allStats } = await supabaseClient.from('match_stats').select('*');
+    if (allStats && allStats.length > 0) {
+        const activeIds = new Set(active.map(p => p.id));
+        const activeStats = allStats.filter(s => activeIds.has(s.player_id));
+        if (activeStats.length > 0) {
+            let tK = 0, tD = 0, tA = 0, tP = 0;
+            activeStats.forEach(s => { tK += s.kills || 0; tD += s.deaths || 0; tA += s.assists || 0; tP += s.points || 0; });
+            let kdSt = tD === 0 ? tK : (tK / tD);
+            let kdaSt = tD === 0 ? (tK + tA) : ((tK + tA) / tD);
+            const stCount = Math.max(...activeStats.map(s => s.stage_number));
+            avgKdStage = kdSt.toFixed(2); avgKdaStage = kdaSt.toFixed(2); avgPtsStage = Math.round(tP / stCount).toString();
+        }
+    }
+
+    const statsY = 420; 
+    ctx.fillStyle = '#ff9800'; ctx.font = 'bold 20px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText('СРЕДНИЕ ПОКАЗАТЕЛИ', 600, statsY);
+    const blockW = 380, blockH = 70, row1Y = statsY + 20, row2Y = row1Y + blockH + 15;
+
+    const drawBlocks = (blocks, yPos) => {
+        blocks.forEach(b => {
+            ctx.fillStyle = '#1a201a'; ctx.beginPath(); ctx.roundRect(b.x, yPos, blockW, blockH, 8); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+            ctx.fillStyle = '#7a857a'; ctx.font = '14px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(b.title, b.x + blockW / 2, yPos + 25);
+            ctx.fillStyle = '#4caf50'; ctx.font = 'bold 22px Segoe UI'; ctx.fillText(b.value, b.x + blockW / 2, yPos + 55);
+        });
+    };
+    drawBlocks([{ title: 'КД (за этап)', value: avgKdStage, x: 20 }, { title: 'КДА (за этап)', value: avgKdaStage, x: 410 }, { title: 'Очки (за этап)', value: avgPtsStage, x: 800 }], row1Y);
+    drawBlocks([{ title: 'Общий КД', value: avgKdTotal, x: 20 }, { title: 'Общий КДА', value: avgKdaTotal, x: 410 }, { title: 'Общие очки', value: avgPtsTotal, x: 800 }], row2Y);
+
+    const base64Image = canvas.toDataURL('image/png');
+    try {
+        const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/send-to-discord', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId: ANALYTICS_CHANNEL_ID, content: '', imageBase64: base64Image, deletePrevious: true })
+        });
+        if (res.ok) showToast('Аналитика отправлена в Discord!', 'success'); else showToast('Ошибка при отправке.', 'error');
+    } catch (err) { console.error(err); showToast('Ошибка отправки.', 'error'); }
+}
+
+async function sendRosterScreenshot() {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1200; canvas.height = 900;
+    ctx.fillStyle = '#0d0f0d'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ff9800'; ctx.font = 'bold 28px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText('СОСТАВ КЛАНА', 600, 50);
+
+    const cardW = 360, cardH = 350, gapX = 30, gapY = 40;
+    const startX = (1200 - (cardW * 3 + gapX * 2)) / 2, startY = 100;
+
+    SQUADS_CONFIG.forEach((squad, index) => {
+        const col = index % 3, row = Math.floor(index / 3);
+        const x = startX + col * (cardW + gapX), y = startY + row * (cardH + gapY);
+        ctx.fillStyle = '#1a201a'; ctx.beginPath(); ctx.roundRect(x, y, cardW, cardH, 8); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+        ctx.fillStyle = '#4caf50'; ctx.font = 'bold 18px Segoe UI'; ctx.textAlign = 'center'; ctx.fillText(squad.name, x + cardW / 2, y + 35);
+        ctx.beginPath(); ctx.moveTo(x + 20, y + 50); ctx.lineTo(x + cardW - 20, y + 50); ctx.strokeStyle = '#4caf50'; ctx.stroke();
+
+        squad.roles.forEach((role, rIndex) => {
+            const slotY = y + 70 + rIndex * 45;
+            const player = activePlayers.find(p => p.squad === squad.name && p.role === role);
+            const playerName = player ? player.nickname : 'Свободно';
+            const playerColor = player ? '#d1d5d1' : '#555';
+            const displayRole = role.replace(' 1', '').replace(' 2', '').replace(' 3', '');
+            ctx.fillStyle = '#111411'; ctx.beginPath(); ctx.roundRect(x + 20, slotY, cardW - 40, 32, 4); ctx.fill(); ctx.strokeStyle = '#2a3a2a'; ctx.stroke();
+            ctx.fillStyle = '#7a857a'; ctx.font = '14px Segoe UI'; ctx.textAlign = 'left'; ctx.fillText(displayRole, x + 30, slotY + 21, 120);
+            ctx.fillStyle = playerColor; ctx.textAlign = 'right'; ctx.fillText(playerName, x + cardW - 30, slotY + 21, 180); 
+        });
+    });
+
+    const base64Image = canvas.toDataURL('image/png');
+    try {
+        const res = await fetch('https://rpqiapddvlkdecddczqx.supabase.co/functions/v1/send-to-discord', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId: ROSTER_CHANNEL_ID, content: '', imageBase64: base64Image, deletePrevious: true })
+        });
+        if (res.ok) showToast('Состав отправлен в Discord!', 'success'); else showToast('Ошибка при отправке.', 'error');
+    } catch (err) { console.error(err); showToast('Ошибка отправки.', 'error'); }
+}
+
+async function clearAllData() {
+    if (!confirm('⚠️ Удалить ВСЮ статистику и посещаемость? Это необратимо.')) return;
+    const statusDiv = document.getElementById('photo-status');
+    if (statusDiv) statusDiv.innerHTML = 'УДАЛЕНИЕ...';
+    try {
+        await supabaseClient.from('match_stats').delete().neq('id', 0);
+        await supabaseClient.from('attendance').delete().neq('id', 0);
+        await supabaseClient.from('players').update({ kd: 0, kda: 0, points: 0 }).neq('id', 0);
+        if (statusDiv) statusDiv.innerHTML = 'ВСЁ ОЧИЩЕНО!';
+        await loadAllData();
+        loadMatchStats();
+        loadAttendance();
+        showToast('Все данные успешно очищены', 'success');
+    } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
+}
+
+loadAllData();
