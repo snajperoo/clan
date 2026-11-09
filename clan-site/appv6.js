@@ -7,7 +7,6 @@ let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allN
 let currentEditId = null, maxAttendanceStage = 3, maxTournament = 4, isAdmin = false, currentPhotoFile = null;
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
 
-// Сезоны
 let currentSeason = 'all';
 const TOURNAMENTS_PER_SEASON = 12;
 
@@ -81,12 +80,10 @@ function checkLogin() {
 
 function logout() { location.reload(); }
 
-// ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ СЕЗОНОВ
 function switchViewingSeason(val) {
     currentSeason = val;
     showToast(`Выбран сезон: ${val === 'all' ? 'Все время' : val}`, 'info');
     
-    // Обновляем данные на активных вкладках
     if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
     if (document.getElementById('tab-calendar').classList.contains('active')) loadCalendar();
     if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
@@ -782,7 +779,6 @@ async function loadMatchHistory() {
         return;
     }
 
-    // Фильтруем матчи по выбранному сезону
     const filteredMatches = matches.filter(m => filterBySeason(Math.ceil((m.stage_number || 0) / 3)));
 
     filteredMatches.forEach(match => {
@@ -950,20 +946,16 @@ async function loadCalendar() {
     if (!list) return;
     list.innerHTML = 'Загрузка...';
 
-    // Получаем данные из БД
-    const { data: events } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('stage_number', { ascending: true });
+    const { data: events } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('match_time', { ascending: true }).order('tournament_number', { ascending: true });
     const { data: matches } = await supabaseClient.from('clan_matches').select('stage_number');
     
-    // Вычисляем максимальный турнир для подсказки
     let maxStage = 0;
     if (matches && matches.length > 0) { maxStage = Math.max(...matches.map(m => m.stage_number || 0)); }
     const maxTourney = Math.ceil(maxStage / 3) || 0;
     
-    // Заполняем поле с автоинкрементом
     const startTourneyInput = document.getElementById('bulk-start-tournament');
     if (startTourneyInput) startTourneyInput.value = maxTourney + 1;
 
-    // Фильтруем по сезону
     const filteredEvents = (events || []).filter(e => filterBySeason(e.tournament_number || 0));
 
     if (filteredEvents.length === 0) {
@@ -971,19 +963,42 @@ async function loadCalendar() {
         return;
     }
 
-    list.innerHTML = '';
+    // Группируем события по дате, времени и номеру турнира
+    const grouped = {};
     filteredEvents.forEach(e => {
-        const dateStr = e.match_date ? new Date(e.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
-        const timeStr = e.match_time ? e.match_time.slice(0, 5) : '';
-        
+        const key = `${e.match_date}_${e.tournament_number}_${e.match_time}`;
+        if (!grouped[key]) {
+            grouped[key] = {
+                date: e.match_date,
+                time: e.match_time,
+                tourney: e.tournament_number,
+                notes: e.notes,
+                stages: [],
+                ids: []
+            };
+        }
+        if (e.stage_number) grouped[key].stages.push(e.stage_number);
+        grouped[key].ids.push(e.id);
+    });
+
+    list.innerHTML = '';
+    Object.values(grouped).forEach(g => {
+        const dateStr = g.date ? new Date(g.date).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const timeStr = g.time ? g.time.slice(0, 5) : '';
+        const stagesStr = g.stages.length > 0 ? g.stages.sort((a,b)=>a-b).join(', ') : '-';
+        const idsStr = g.ids.join(',');
+
         list.innerHTML += `
-            <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div>
                     <div style="color:var(--accent-color); font-weight:bold; font-size:1.2em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''}</div>
-                    <div style="margin-top:5px;">Турнир: <strong>${e.tournament_number || '-'}</strong> ${e.stage_number ? '| Этап: ' + e.stage_number : ''}</div>
-                    <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${e.notes || ''}</div>
+                    <div style="margin-top:5px; display:flex; gap:15px; flex-wrap:wrap;">
+                        <span>Турнир: <strong>${g.tourney || '-'}</strong></span>
+                        <span>Этапы: <strong>${stagesStr}</strong></span>
+                    </div>
+                    <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${g.notes || ''}</div>
                 </div>
-                ${isAdmin ? `<button class="btn btn-danger" onclick="deleteCalendarEvent(${e.id})">X</button>` : ''}
+                ${isAdmin ? `<button class="btn btn-danger" style="padding: 8px 15px;" onclick="deleteCalendarEvents([${idsStr}])">X</button>` : ''}
             </div>
         `;
     });
@@ -1079,10 +1094,13 @@ async function generateBulkCalendar() {
     loadCalendar();
 }
 
-async function deleteCalendarEvent(id) {
-    if (!isAdmin || !confirm('Удалить это событие?')) return;
-    await supabaseClient.from('clan_calendar').delete().eq('id', id);
+async function deleteCalendarEvents(ids) {
+    if (!isAdmin || !confirm('Удалить все этапы этого турнира?')) return;
+    for (const id of ids) {
+        await supabaseClient.from('clan_calendar').delete().eq('id', id);
+    }
     loadCalendar();
+    showToast('Турнир удален из календаря', 'success');
 }
 // ==================================================
 
@@ -1309,7 +1327,6 @@ async function loadAnalytics() {
     if (mapStatsBody) {
         const { data: matches } = await supabaseClient.from('clan_matches').select('*');
         if (matches && matches.length > 0) {
-            // Фильтруем по сезону
             const filteredMatches = matches.filter(m => filterBySeason(Math.ceil((m.stage_number || 0) / 3)));
             const mapData = {};
             filteredMatches.forEach(m => {
