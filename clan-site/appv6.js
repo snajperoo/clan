@@ -51,6 +51,45 @@ function getTierData(rating) {
     return current;
 }
 
+// ==================== АВТОСКРОЛЛ ПРИ ПЕРЕТАСКИВАНИИ ====================
+document.addEventListener('dragover', function(e) {
+    const scrollThreshold = 100; // Расстояние от края экрана
+    const scrollSpeed = 20; // Скорость прокрутки
+    
+    // Если тянем вверх
+    if (e.clientY < scrollThreshold) {
+        window.scrollBy(0, -scrollSpeed);
+    }
+    // Если тянем вниз
+    else if (window.innerHeight - e.clientY < scrollThreshold) {
+        window.scrollBy(0, scrollSpeed);
+    }
+});
+// =====================================================================
+
+// ==================== СИНХРОНИЗАЦИЯ В РЕАЛЬНОМ ВРЕМЕНИ ====================
+function setupRealtimeSync() {
+    supabaseClient
+        .channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
+            // Если изменились данные в базе, мгновенно обновляем интерфейс
+            console.log('Изменение в БД:', payload);
+            
+            loadAllData().then(() => {
+                if (document.getElementById('tab-roster').classList.contains('active')) initDragAndDrop();
+                if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
+                if (document.getElementById('tab-missed').classList.contains('active')) loadAllMissed();
+                if (document.getElementById('tab-stats').classList.contains('active')) loadMatchStats();
+                if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
+                if (document.getElementById('tab-fines').classList.contains('active')) loadFines();
+                if (document.getElementById('tab-calendar').classList.contains('active')) loadCalendar();
+                if (document.getElementById('tab-analytics').classList.contains('active')) loadAnalytics();
+            });
+        })
+        .subscribe();
+}
+// =========================================================================
+
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -188,16 +227,25 @@ async function saveSquadNames() {
         return;
     }
 
-    for (const ch of changes) {
-        await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
-    }
-
-    localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
-
     document.getElementById('squad-names-modal').style.display = 'none';
-    showToast('Названия отрядов сохранены!', 'success');
-    await loadAllData();
-    initDragAndDrop();
+    showToast('Сохранение...', 'info');
+
+    try {
+        // Обновляем БД
+        for (const ch of changes) {
+            const { error } = await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
+            if (error) throw error;
+        }
+        // Сохраняем локально
+        localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
+        
+        // Обновляем интерфейс без перезагрузки
+        await loadAllData();
+        initDragAndDrop();
+        showToast('Названия отрядов обновлены!', 'success');
+    } catch (err) {
+        showToast('Ошибка при сохранении: ' + err.message, 'error');
+    }
 }
 // =============================================================
 
@@ -535,14 +583,42 @@ function initDragAndDrop(filterText = '') {
 
 async function handleDrop(event, slot) {
     event.preventDefault(); slot.classList.remove('drag-over'); if (!isAdmin) return;
-    const id = event.dataTransfer.getData('text/plain'), sq = slot.dataset.squad, role = slot.dataset.role, ex = slot.dataset.playerId;
+    
+    const id = parseInt(event.dataTransfer.getData('text/plain'));
+    const sq = slot.dataset.squad;
+    const role = slot.dataset.role;
+    const ex = slot.dataset.playerId ? parseInt(slot.dataset.playerId) : null;
+    
     if (!id) return; 
-    
-    if (ex && ex !== '') await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', ex);
-    await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id);
-    const { error } = await supabaseClient.from('players').update({ squad: sq, role: role }).eq('id', id);
-    
-    if (!error) { await loadAllData(); initDragAndDrop(); showToast('Игрок перемещен', 'success'); }
+
+    try {
+        // 1. Убираем старого игрока из слота, если он там был
+        if (ex && ex !== id) {
+            await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', ex);
+        }
+        
+        // 2. Очищаем текущий отряд перетаскиваемого игрока
+        await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id);
+        
+        // 3. Записываем в новый отряд и роль
+        const { error } = await supabaseClient.from('players').update({ squad: sq, role: role }).eq('id', id);
+        if (error) throw error;
+
+        // Обновляем локальные данные (чтобы не ждать перезагрузки)
+        const p = allPlayers.find(x => x.id === id);
+        if (p) { p.squad = sq; p.role = role; }
+
+        showToast('Игрок перемещен', 'success');
+        
+        // Обновляем интерфейс
+        await loadAllData(); 
+        initDragAndDrop();
+    } catch (err) {
+        console.error("Ошибка при перемещении:", err);
+        showToast('Ошибка при сохранении: ' + err.message, 'error');
+        await loadAllData(); 
+        initDragAndDrop();
+    }
 }
 
 async function removeFromSquad(id) {
@@ -1647,4 +1723,6 @@ async function clearAllData() {
     } catch (err) { showToast('Ошибка: ' + err.message, 'error'); }
 }
 
+// Запуск синхронизации и загрузки данных при старте
+setupRealtimeSync();
 loadAllData();
