@@ -25,15 +25,16 @@ let SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// Функция загрузки названий из БД
+// Функция загрузки названий из БД (ИСПРАВЛЕНО: single -> maybeSingle)
 async function loadSquadConfig() {
-    const { data } = await supabaseClient.from('clan_settings').select('value').eq('key', 'squads').single();
+    const { data, error } = await supabaseClient.from('clan_settings').select('value').eq('key', 'squads').maybeSingle();
     if (data && data.value) {
         const parsed = data.value;
         if (Array.isArray(parsed) && parsed.length === 6) {
             SQUADS_CONFIG.forEach((sq, i) => { sq.name = parsed[i]; });
         }
     }
+    // Если error нет, но data null — это нормально (настроек еще нет)
 }
 
 const TIER_SETTINGS = [
@@ -226,18 +227,14 @@ async function saveSquadNames() {
     showToast('Сохранение...', 'info');
 
     try {
-        // 1. Сохраняем названия в базу данных (глобально для всех)
         await supabaseClient.from('clan_settings').upsert({ key: 'squads', value: newNamesArray });
         
-        // 2. Обновляем игроков в базе
         for (const ch of changes) {
             await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
         }
         
-        // 3. Сохраняем локально на всякий случай
         localStorage.setItem('custom_squads', JSON.stringify(newNamesArray));
         
-        // 4. Обновляем интерфейс
         await loadAllData();
         initDragAndDrop();
         showToast('Названия отрядов обновлены!', 'success');
@@ -245,10 +242,28 @@ async function saveSquadNames() {
         showToast('Ошибка при сохранении: ' + err.message, 'error');
     }
 }
+
+// ДОБАВЛЕНА ФУНКЦИЯ ОЧИСТКИ СОСТАВА
+async function clearAllSquads() {
+    if (!isAdmin || !confirm('Очистить состав? Все игроки будут убраны из отрядов.')) return;
+    
+    try {
+        // Сбрасываем squad и role у всех игроков
+        const { error } = await supabaseClient.from('players').update({ squad: null, role: null }).neq('id', 0);
+        
+        if (error) throw error;
+        
+        showToast('Состав очищен', 'success');
+        await loadAllData();
+        initDragAndDrop();
+    } catch (err) {
+        console.error(err);
+        showToast('Ошибка очистки: ' + err.message, 'error');
+    }
+}
 // =============================================================
 
 async function loadAllData() {
-    // Загружаем названия отрядов ПЕРЕД тем, как строить интерфейс
     await loadSquadConfig();
     populateProfileDropdowns();
     
