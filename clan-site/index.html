@@ -161,6 +161,17 @@
         <div class="header">
             <h1>STALZONE КЛАН</h1>
             <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+                <!-- ВОЗВРАЩЕН ВЫБОР СЕЗОНА -->
+                <div style="display:flex; align-items:center; gap:8px; background:var(--card-bg); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border-color);">
+                    <span style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Сезон:</span>
+                    <select id="season-selector" onchange="switchViewingSeason(this.value)" style="background:transparent; color:var(--accent-color); border:none; padding:4px; font-family:'Courier New', monospace; font-weight:bold; cursor:pointer; font-size:1em; outline:none;">
+                        <option value="all">Все время</option>
+                        <option value="1">Сезон 1</option>
+                        <option value="2">Сезон 2</option>
+                        <option value="3">Сезон 3</option>
+                    </select>
+                    <span id="season-progress" style="color:var(--text-muted); font-size:0.75em; font-family:'Courier New', monospace; border-left:1px solid var(--border-color); padding-left:10px;">—</span>
+                </div>
                 <button class="theme-toggle" id="logout-btn" onclick="logout()" style="display:none;">Выход</button>
             </div>
         </div>
@@ -385,6 +396,10 @@
                     <div class="form-group"><label>Дата начала</label><input type="date" id="bulk-start"></div>
                     <div class="form-group"><label>Дата конца</label><input type="date" id="bulk-end"></div>
                 </div>
+                <div class="form-grid-2">
+                    <div class="form-group"><label>Стартовый номер турнира</label><input type="number" id="bulk-start-tournament" value="1"></div>
+                    <div class="form-group"><label>Время (для всех)</label><input type="time" id="bulk-time" value="19:00"></div>
+                </div>
                 <div class="form-group" style="display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">
                     <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="1"> Пн</label>
                     <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="2"> Вт</label>
@@ -394,11 +409,10 @@
                     <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="6" checked> Сб</label>
                     <label style="cursor:pointer;"><input type="checkbox" class="bulk-day" value="0"> Вс</label>
                 </div>
-                <div class="form-grid-2">
-                    <div class="form-group"><label>Время (для всех)</label><input type="time" id="bulk-time" value="19:00"></div>
-                    <div class="form-group"><label>Заметки (для всех)</label><input type="text" id="bulk-notes" placeholder="Сезон 2"></div>
+                <div class="form-group">
+                    <label>Заметки (для всех)</label><input type="text" id="bulk-notes" placeholder="Сезон 2">
                 </div>
-                <small style="color:var(--accent-color); display:block; margin-top:10px; font-size:0.85em;">* Для каждой выбранной даты автоматически создастся <strong>3 этапа</strong> (1, 2, 3).</small>
+                <small style="color:var(--accent-color); display:block; margin-top:10px; font-size:0.85em;">* На каждый выбранный день автоматически создастся 1 турнир (внутри него 3 этапа). Нумерация продолжится автоматически.</small>
                 <button class="btn" onclick="generateBulkCalendar()" style="margin-top:15px; width:100%; background:var(--accent-color); color:#000;">Сгенерировать события</button>
             </div>
 
