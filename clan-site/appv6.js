@@ -15,7 +15,7 @@ let myChart = null;
 const ADMIN_SECRET_CODE = 'ADMIN123';
 const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
 
-// Конфиг отрядов вынесен в let для возможности редактирования
+// Конфиг отрядов
 let SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
     { name: '2 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -188,12 +188,10 @@ async function saveSquadNames() {
         return;
     }
 
-    // Обновляем БД
     for (const ch of changes) {
         await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
     }
 
-    // Сохраняем в localStorage
     localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
 
     document.getElementById('squad-names-modal').style.display = 'none';
@@ -581,17 +579,14 @@ async function loadAttendance() {
     });
 }
 
-// ОБНОВЛЕННАЯ ФУНКЦИЯ СОХРАНЕНИЯ СТАТУСА (С ЗАЩИТОЙ ОТ СБРОСА)
 async function updateAttendance(id, t, s) {
     if (!isAdmin) return;
     
     if (s === 'Не отмечен') {
         await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t);
     } else {
-        // Пытаемся обновить (upsert)
         const { error } = await supabaseClient.from('attendance').upsert({ player_id: id, tournament_number: t, status: s }, { onConflict: 'player_id, tournament_number' });
         
-        // Если ошибка (например, нет constraint), делаем вручную
         if (error) {
             console.error("Upsert failed, trying manual update", error);
             const { data: existing } = await supabaseClient.from('attendance').select('id').eq('player_id', id).eq('tournament_number', t).single();
@@ -603,7 +598,6 @@ async function updateAttendance(id, t, s) {
         }
     }
     
-    // Обновляем данные локально, чтобы UI не мигал
     const localRec = allAttendance.find(a => a.player_id === id && a.tournament_number === t);
     if (localRec) localRec.status = s;
     
@@ -762,7 +756,6 @@ function deleteStage() {
     maxAttendanceStage -= 3; loadMatchStats();
 }
 
-// ==================== ЛОГИКА СРАВНЕНИЯ (ДО 4 ЧЕЛОВЕК) ====================
 function initCompareTab() {
     const select = document.getElementById('compare-players');
     const periodSelect = document.getElementById('compare-period');
@@ -848,7 +841,6 @@ function renderComparison() {
 
     container.innerHTML = `<table class="compare-table">${thead}${tbody}</table>`;
 }
-// =======================================================================
 
 async function loadMatchHistory() {
     const timeline = document.getElementById('history-timeline');
@@ -896,18 +888,7 @@ async function loadMatchHistory() {
 
     timeline.innerHTML = '';
     const reversedMatches = [...filteredMatches].reverse();
-    let simRating = 1000;
-    let simWins = 0, simLosses = 0, simDraws = 0;
-    let simGears = 0;
     
-    // Для правильного отображения гильз восстанавливаем историю с начала
-    [...filteredMatches].forEach(m => {
-        const cS = m.clan_score || 0;
-        const eS = m.enemy_points || 0;
-        if (cS > eS) { simGears += getTierData(simRating).winGears; simRating += 50; }
-        else if (cS < eS) { if (cS >= (eS * 0.2)) simGears += getTierData(simRating).lossGears; simRating -= 50; }
-    });
-
     let currentCalcRating = 1000;
     
     reversedMatches.forEach((match, index) => {
@@ -1055,7 +1036,6 @@ function renderHistoryChart(wins, losses, draws = 0) {
     });
 }
 
-// ==================== КАЛЕНДАРЬ ====================
 async function loadCalendar() {
     const list = document.getElementById('calendar-list');
     if (!list) return;
@@ -1212,7 +1192,6 @@ async function deleteCalendarEvents(ids) {
     loadCalendar();
     showToast('Турнир удален из календаря', 'success');
 }
-// ==================================================
 
 async function loadFines() {
     const { data } = await supabaseClient.from('fines').select('*, players(nickname)').order('created_at', { ascending: false });
