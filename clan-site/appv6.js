@@ -498,7 +498,7 @@ async function updateAttendance(id, t, s) {
     if (s === 'Не отмечен') await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t);
     else await supabaseClient.from('attendance').upsert({ player_id: id, tournament_number: t, status: s }, { onConflict: 'player_id, tournament_number' });
     loadAttendance();
-    // Если вкладка пропусков открыта, обновляем и её
+    // Синхронизация
     if (document.getElementById('tab-missed').classList.contains('active')) loadAllMissed();
 }
 
@@ -575,7 +575,7 @@ async function updateMissedStatus(playerId, globalStage, newStatus) {
         await supabaseClient.from('attendance').upsert({ player_id: playerId, tournament_number: globalStage, status: newStatus }, { onConflict: 'player_id, tournament_number' }); 
     }
     
-    // Синхронизация: обновляем и пропуски, и посещаемость
+    // Синхронизация
     await loadAllMissed();
     if (document.getElementById('tab-attendance').classList.contains('active')) loadAttendance();
     showToast('Статус обновлен', 'success');
@@ -925,7 +925,7 @@ async function loadCalendar() {
     if (!list) return;
     list.innerHTML = 'Загрузка...';
 
-    const { data: events } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true });
+    const { data: events } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('stage_number', { ascending: true });
     
     if (!events || events.length === 0) {
         list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет запланированных турниров</div>';
@@ -1002,11 +1002,15 @@ async function generateBulkCalendar() {
             const day = String(current.getDate()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}`;
             
-            events.push({
-                match_date: dateStr,
-                match_time: time || null,
-                notes: notes
-            });
+            // Генерируем 3 этапа на каждый выбранный день
+            for (let stageNum = 1; stageNum <= 3; stageNum++) {
+                events.push({
+                    match_date: dateStr,
+                    match_time: time || null,
+                    stage_number: stageNum,
+                    notes: notes
+                });
+            }
         }
         current.setDate(current.getDate() + 1);
     }
@@ -1025,7 +1029,7 @@ async function generateBulkCalendar() {
     
     if (error) return showToast('Ошибка: ' + error.message, 'error');
     
-    showToast(`Успешно добавлено ${events.length} событий!`, 'success');
+    showToast(`Успешно добавлено ${events.length} событий (${events.length / 3} дней)!`, 'success');
     document.getElementById('bulk-start').value = '';
     document.getElementById('bulk-end').value = '';
     loadCalendar();
