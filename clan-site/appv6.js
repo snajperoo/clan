@@ -148,34 +148,60 @@ function populateProfileDropdowns() {
     SQUADS_CONFIG[0].roles.forEach(r => { roleSelect.innerHTML += `<option value="${r}">${r}</option>`; });
 }
 
-// РЕДАКТИРОВАНИЕ НАЗВАНИЙ ОТРЯДОВ
-async function editSquadNames() {
+// ==================== РЕДАКТИРОВАНИЕ ОТРЯДОВ ====================
+function openSquadNamesModal() {
     if (!isAdmin) return;
-    const newNames = [];
-    let hasChanges = false;
-    
-    for (let i=0; i<6; i++) {
-        const oldName = SQUADS_CONFIG[i].name;
-        const input = prompt(`Название для отряда ${i+1}:`, oldName);
-        
-        if (input !== null && input.trim() !== '' && input.trim() !== oldName) {
-            newNames.push({ old: oldName, new: input.trim() });
-            SQUADS_CONFIG[i].name = input.trim();
-            hasChanges = true;
-        }
-    }
-    
-    if (hasChanges) {
-        showToast('Обновляем базу данных...', 'info');
-        for (const item of newNames) {
-            await supabaseClient.from('players').update({ squad: item.new }).eq('squad', item.old);
-        }
-        localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
-        await loadAllData();
-        initDragAndDrop();
-        showToast('Названия отрядов обновлены!', 'success');
-    }
+    const container = document.getElementById('squad-names-inputs');
+    container.innerHTML = '';
+    SQUADS_CONFIG.forEach((sq, i) => {
+        container.innerHTML += `
+            <div class="form-group">
+                <label>Отряд ${i+1}</label>
+                <input type="text" id="squad-name-input-${i}" value="${sq.name}">
+            </div>
+        `;
+    });
+    document.getElementById('squad-names-modal').style.display = 'flex';
 }
+
+async function saveSquadNames() {
+    if (!isAdmin) return;
+    let changed = false;
+    const changes = [];
+    const uniqueNames = new Set();
+
+    for (let i = 0; i < SQUADS_CONFIG.length; i++) {
+        const inputVal = document.getElementById(`squad-name-input-${i}`).value.trim();
+        if (!inputVal) return showToast('Название отряда не может быть пустым', 'error');
+        if (uniqueNames.has(inputVal)) return showToast('Названия отрядов не должны совпадать', 'error');
+        uniqueNames.add(inputVal);
+        
+        if (inputVal !== SQUADS_CONFIG[i].name) {
+            changes.push({ old: SQUADS_CONFIG[i].name, new: inputVal });
+            SQUADS_CONFIG[i].name = inputVal;
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        document.getElementById('squad-names-modal').style.display = 'none';
+        return;
+    }
+
+    // Обновляем БД
+    for (const ch of changes) {
+        await supabaseClient.from('players').update({ squad: ch.new }).eq('squad', ch.old);
+    }
+
+    // Сохраняем в localStorage
+    localStorage.setItem('custom_squads', JSON.stringify(SQUADS_CONFIG.map(s => s.name)));
+
+    document.getElementById('squad-names-modal').style.display = 'none';
+    showToast('Названия отрядов сохранены!', 'success');
+    await loadAllData();
+    initDragAndDrop();
+}
+// =============================================================
 
 async function loadAllData() {
     populateProfileDropdowns();
