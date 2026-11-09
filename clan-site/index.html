@@ -161,7 +161,6 @@
         <div class="header">
             <h1>STALZONE КЛАН</h1>
             <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
-                <!-- ВОЗВРАЩЕН ВЫБОР СЕЗОНА -->
                 <div style="display:flex; align-items:center; gap:8px; background:var(--card-bg); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border-color);">
                     <span style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px;">Сезон:</span>
                     <select id="season-selector" onchange="switchViewingSeason(this.value)" style="background:transparent; color:var(--accent-color); border:none; padding:4px; font-family:'Courier New', monospace; font-weight:bold; cursor:pointer; font-size:1em; outline:none;">
@@ -307,6 +306,7 @@
             <div class="stage-header">
                 <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Состав клана</h2>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn admin-only" onclick="openSquadNamesModal()" style="background:var(--accent-color); color:#000;">⚙️ Названия отрядов</button>
                     <button class="btn btn-danger" onclick="clearAllSquads()" id="btn-clear-roster">Очистить состав</button>
                     <button class="btn" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
                 </div>
@@ -374,7 +374,6 @@
         <div id="tab-calendar" class="tab-content">
             <div class="stage-header"><h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">📅 Календарь турниров</h2></div>
             
-            <!-- Одиночное добавление -->
             <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--border-color); display:none;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать один турнир</h3>
                 <div class="form-grid-3">
@@ -389,7 +388,6 @@
                 <button class="btn" onclick="addUpcomingMatch()" style="margin-top:10px;">Добавить в календарь</button>
             </div>
 
-            <!-- МАССОВОЕ ЗАПОЛНЕНИЕ -->
             <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:25px; border:1px solid var(--accent-color); display:none;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">⚡ Массовое заполнение сезона</h3>
                 <div class="form-grid-2">
@@ -552,6 +550,16 @@
             <div id="absent-players-list" style="flex:1; overflow-y:auto; margin-bottom:20px; padding-right:5px;"></div>
             <button class="btn" style="width:100%; margin-bottom:15px;" id="save-absent-btn" onclick="saveAbsentStatuses()">ПОДТВЕРДИТЬ</button>
             <button class="btn btn-danger" style="width:100%;" onclick="document.getElementById('absent-modal').style.display='none'">ОТМЕНА</button>
+        </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ОТРЯДОВ -->
+    <div id="squad-names-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h3 style="text-align:center; color:var(--accent-color); margin-top:0; text-transform: uppercase;">Названия отрядов</h3>
+            <div id="squad-names-inputs"></div>
+            <button class="btn" style="width:100%; margin-bottom:15px;" onclick="saveSquadNames()">СОХРАНИТЬ</button>
+            <button class="btn btn-danger" style="width:100%;" onclick="document.getElementById('squad-names-modal').style.display='none'">ОТМЕНА</button>
         </div>
     </div>
 </body>
