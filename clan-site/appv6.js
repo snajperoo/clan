@@ -497,14 +497,17 @@ async function loadAttendance() {
     if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
     maxAttendanceStage = max;
     
+    let maxCalTourney = 0;
+    if (calEvents && calEvents.length > 0) {
+        maxCalTourney = Math.max(...calEvents.map(e => e.tournament_number || 0));
+    }
+    
+    // ИСПРАВЛЕНО: finalMax объявлен в области видимости всей функции
+    const finalMax = Math.max(maxAttendanceStage, maxCalTourney * 3);
+    
     const s = document.getElementById('modal-stage'); 
     if (s) { 
         s.innerHTML = ''; 
-        let maxCalTourney = 0;
-        if (calEvents && calEvents.length > 0) {
-            maxCalTourney = Math.max(...calEvents.map(e => e.tournament_number || 0));
-        }
-        const finalMax = Math.max(maxAttendanceStage, maxCalTourney * 3);
         
         let nextStageToSelect = maxAttendanceStage + 1;
         if (calEvents && calEvents.length > 0) {
