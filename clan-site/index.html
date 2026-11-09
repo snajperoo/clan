@@ -398,7 +398,8 @@
                     <div class="form-group"><label>Время (для всех)</label><input type="time" id="bulk-time" value="19:00"></div>
                     <div class="form-group"><label>Заметки (для всех)</label><input type="text" id="bulk-notes" placeholder="Сезон 2"></div>
                 </div>
-                <button class="btn" onclick="generateBulkCalendar()" style="margin-top:10px; width:100%; background:var(--accent-color); color:#000;">Сгенерировать события</button>
+                <small style="color:var(--accent-color); display:block; margin-top:10px; font-size:0.85em;">* Для каждой выбранной даты автоматически создастся <strong>3 этапа</strong> (1, 2, 3).</small>
+                <button class="btn" onclick="generateBulkCalendar()" style="margin-top:15px; width:100%; background:var(--accent-color); color:#000;">Сгенерировать события</button>
             </div>
 
             <div id="calendar-list"></div>
