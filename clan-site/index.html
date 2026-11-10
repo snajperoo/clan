@@ -135,7 +135,6 @@
         details.tournament-group[open] summary { border-bottom: 1px solid var(--border-color); border-radius: var(--radius) var(--radius) 0 0; }
         .tournament-content { padding: 15px; overflow-x: auto; }
 
-        /* Увеличенные бейджики заметок */
         .badge-coach { background: #4caf50; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-left: 8px; display: inline-block; }
         .badge-tk { background: #9cdcfe; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-left: 4px; display: inline-block; }
 
@@ -175,7 +174,6 @@
         
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab(event, 'tab-tops')">Топы</button>
-            <!-- Мой профиль теперь только для игроков, админ его не видит -->
             <button class="tab-btn" id="my-profile-tab" onclick="openTab(event, 'tab-my-profile')" style="display:none;">Мой профиль</button>
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-profile')">База игроков</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-roster')">Состав</button>
@@ -200,7 +198,7 @@
             </div>
         </div>
 
-        <!-- МОЙ ПРОФИЛЬ (Только для игроков) -->
+        <!-- МОЙ ПРОФИЛЬ -->
         <div id="tab-my-profile" class="tab-content">
             <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Личный кабинет</h2>
             <div id="my-profile-content" style="display:none;">
@@ -484,6 +482,36 @@
                 <div class="analytics-card">
                     <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ОЧКИ</h3>
                     <table id="top-points-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Очки</th></tr></thead><tbody></tbody></table>
+                </div>
+                <!-- ВОЗВРАЩЕНО: Статистика по картам -->
+                <div class="analytics-card">
+                    <h3 style="color:#9cdcfe; text-align:center; margin-bottom:15px; text-transform: uppercase;">СТАТИСТИКА ПО КАРТАМ</h3>
+                    <table id="map-stats-table" style="width:100%;">
+                        <thead><tr><th>Карта</th><th>Игр</th><th>Победы</th><th>Винрейт</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ВОЗВРАЩЕНО: Сводка -->
+            <div class="stats-summary" style="margin-top:25px;">
+                <div><span style="color:var(--text-muted);">Всего:</span> <strong id="stat-total-players">0</strong></div>
+                <div><span style="color:var(--text-muted);">В отрядах:</span> <strong id="stat-in-squads">0</strong></div>
+                <div><span style="color:var(--text-muted);">Резерв:</span> <strong id="stat-free">0</strong></div>
+            </div>
+            
+            <!-- ВОЗВРАЩЕНО: Средние показатели -->
+            <div class="analytics-card" style="margin-top: 25px;">
+                <h3 style="color:var(--accent-color); text-align:center; margin-top:0; text-transform: uppercase;">Средние</h3>
+                <div class="stats-summary" style="margin-top:15px; flex-wrap:wrap;">
+                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">КД (этап)</span><br><strong id="avg-kd-stage" style="font-size:1.5em; color:var(--accent-color);">0.00</strong></div>
+                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">КДА (этап)</span><br><strong id="avg-kda-stage" style="font-size:1.5em; color:var(--accent-color);">0.00</strong></div>
+                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Очки (этап)</span><br><strong id="avg-points-stage" style="font-size:1.5em; color:var(--accent-color);">0</strong></div>
+                </div>
+                <div class="stats-summary" style="margin-top:15px; flex-wrap:wrap; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Общий КД</span><br><strong id="avg-kd-total" style="font-size:1.5em; color: var(--success-color);">0.00</strong></div>
+                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Общий КДА</span><br><strong id="avg-kda-total" style="font-size:1.5em; color: var(--success-color);">0.00</strong></div>
+                    <div style="flex: 1; min-width: 120px;"><span style="color:var(--text-muted); font-size:0.8em;">Общие очки</span><br><strong id="avg-points-total" style="font-size:1.5em; color: var(--success-color);">0</strong></div>
                 </div>
             </div>
         </div>
