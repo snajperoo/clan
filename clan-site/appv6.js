@@ -190,7 +190,6 @@ function checkLogin() {
         isAdmin = true; document.body.classList.add('is-admin');
         document.getElementById('login-modal').style.display = 'none';
         document.getElementById('logout-btn').style.display = 'inline-block';
-        // УБРАНО: document.getElementById('my-profile-tab').style.display = 'inline-block'; (Админ не видит свой профиль)
         loadAllData();
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex'); 
         showToast('Вход выполнен', 'info');
@@ -1057,7 +1056,6 @@ async function addFine() {
 async function toggleFineStatus(id, st) { await supabaseClient.from('fines').update({ status: st === 'open' ? 'closed' : 'open' }).eq('id', id); loadFines(); }
 async function deleteFine(id) { if (confirm('Удалить?')) { await supabaseClient.from('fines').delete().eq('id', id); loadFines(); } }
 
-// ВОССТАНОВЛЕННАЯ АНАЛИТИКА
 async function loadAnalytics() {
     let q = supabaseClient.from('players').select('*'); 
     q = filterBySeason(q); 
@@ -1077,6 +1075,68 @@ async function loadAnalytics() {
     // ТОП ОЧКИ
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
     document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
+    
+    // СВОДКА
+    document.getElementById('stat-total-players').innerText = active.length;
+    const inS = active.filter(p => p.squad && p.squad.trim() !== '').length;
+    document.getElementById('stat-in-squads').innerText = inS; document.getElementById('stat-free').innerText = active.length - inS;
+
+    // СТАТИСТИКА ПО КАРТАМ
+    let qMatches = supabaseClient.from('clan_matches').select('*');
+    qMatches = filterBySeason(qMatches);
+    const { data: matches } = await qMatches;
+    const mapStatsBody = document.querySelector('#map-stats-table tbody');
+    if (matches && matches.length > 0) {
+        const mapData = {};
+        matches.forEach(m => {
+            const map = m.map_name ? m.map_name.trim() : 'Неизвестная';
+            if (!mapData[map]) mapData[map] = { games: 0, wins: 0 };
+            mapData[map].games++;
+            if (m.clan_score > m.enemy_points) mapData[map].wins++;
+        });
+        const sortedMaps = Object.entries(mapData).sort((a, b) => b[1].games - a[1].games);
+        mapStatsBody.innerHTML = sortedMaps.map(([name, data]) => {
+            const wr = Math.round((data.wins / data.games) * 100);
+            const wrColor = wr >= 50 ? 'var(--success-color)' : 'var(--danger-color)';
+            return `<tr><td>${name}</td><td>${data.games}</td><td>${data.wins}</td><td style="color:${wrColor}; font-weight:bold;">${wr}%</td></tr>`;
+        }).join('');
+    } else {
+        mapStatsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных</td></tr>';
+    }
+
+    // СРЕДНИЕ ПОКАЗАТЕЛИ
+    if (active.length > 0) {
+        const sumKd = active.reduce((acc, p) => acc + (p.kd || 0), 0);
+        const sumKda = active.reduce((acc, p) => acc + (p.kda || 0), 0);
+        const sumPts = active.reduce((acc, p) => acc + (p.points || 0), 0);
+
+        document.getElementById('avg-kd-total').innerText = (sumKd / active.length).toFixed(2);
+        document.getElementById('avg-kda-total').innerText = (sumKda / active.length).toFixed(2);
+        document.getElementById('avg-points-total').innerText = Math.round(sumPts / active.length);
+
+        let qStats = supabaseClient.from('match_stats').select('*');
+        qStats = filterBySeason(qStats);
+        const { data: allStats } = await qStats;
+        
+        if (allStats && allStats.length > 0) {
+            const activeIds = new Set(active.map(p => p.id));
+            const activeStats = allStats.filter(s => activeIds.has(s.player_id));
+            if (activeStats.length > 0) {
+                let totalKills = 0, totalDeaths = 0, totalAssists = 0, totalPoints = 0;
+                activeStats.forEach(s => {
+                    totalKills += s.kills || 0; totalDeaths += s.deaths || 0; totalAssists += s.assists || 0; totalPoints += s.points || 0;
+                });
+                let kdStage = totalDeaths === 0 ? totalKills : (totalKills / totalDeaths);
+                let kdaStage = totalDeaths === 0 ? (totalKills + totalAssists) : ((totalKills + totalAssists) / totalDeaths);
+                const stagesCount = Math.max(...activeStats.map(s => s.stage_number));
+                const avgPtsStage = totalPoints / stagesCount;
+
+                document.getElementById('avg-kd-stage').innerText = kdStage.toFixed(2);
+                document.getElementById('avg-kda-stage').innerText = kdaStage.toFixed(2);
+                document.getElementById('avg-points-stage').innerText = Math.round(avgPtsStage);
+            }
+        }
+    }
 }
 
 async function loadPlayerNotes(playerId) {
