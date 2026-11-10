@@ -169,6 +169,12 @@
                     <button class="btn" onclick="openSeasonModal()" style="background:var(--success-color); color:#000; font-size:0.75em;">+ Сезон</button>
                 </div>
 
+                <!-- ИНДИКАТОР АВТО-БЭКАПА -->
+                <div style="font-size:0.75em; font-family:'Courier New', monospace; text-align:right; padding:4px 10px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:var(--radius);" title="Сервер делает бэкап каждый час в 00 минут">
+                    <div style="font-size:0.7em; text-transform:uppercase; opacity:0.7; color:var(--text-muted);">Бэкап</div>
+                    <div id="backup-status" style="color:var(--success-color); font-weight:bold;">—</div>
+                </div>
+
                 <button class="theme-toggle" id="logout-btn" onclick="logout()" style="display:none; font-size:0.8em;">Выход</button>
             </div>
         </div>
@@ -431,7 +437,6 @@
                 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                     <button class="btn" onclick="addTournament()">+ Турнир</button>
                     <button class="btn btn-danger" onclick="deleteTournament()">- Турнир</button>
-                    <button class="btn btn-danger" style="background:#ff0000;" onclick="clearAllData()">ОЧИСТИТЬ</button>
                 </div>
             </div>
             <input type="text" id="attendance-search" placeholder="ПОИСК..." oninput="loadAttendance()" class="search-input">
