@@ -161,9 +161,10 @@
                     </select>
                 </div>
 
-                <div class="admin-only" style="display:none; gap:5px;">
-                    <button class="btn" onclick="exportBackup()" style="background:#5865F2; color:#fff; font-size:0.75em;" title="Скачать JSON со всеми данными">💾 Бэкап</button>
-                    <button class="btn" onclick="document.getElementById('import-backup').click()" style="background:#e67e22; color:#fff; font-size:0.75em;" title="Загрузить JSON">📂 Восстановить</button>
+                <div class="admin-only" style="display:none; gap:5px; flex-wrap:wrap;">
+                    <button class="btn" onclick="exportBackup()" style="background:#5865F2; color:#fff; font-size:0.75em;" title="Скачать JSON">💾 Скачать</button>
+                    <button class="btn" onclick="restoreFromDB()" style="background:#e67e22; color:#fff; font-size:0.75em;" title="Восстановить из БД">📂 Из БД</button>
+                    <button class="btn" onclick="document.getElementById('import-backup').click()" style="background:#9b59b6; color:#fff; font-size:0.75em;" title="Загрузить файл">⬆️ Файл</button>
                     <input type="file" id="import-backup" accept=".json" style="display:none;" onchange="importBackup(this)">
                     <button class="btn" onclick="openSeasonModal()" style="background:var(--success-color); color:#000; font-size:0.75em;">+ Сезон</button>
                 </div>
@@ -483,7 +484,6 @@
                     <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ОЧКИ</h3>
                     <table id="top-points-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Очки</th></tr></thead><tbody></tbody></table>
                 </div>
-                <!-- ВОЗВРАЩЕНО: Статистика по картам -->
                 <div class="analytics-card">
                     <h3 style="color:#9cdcfe; text-align:center; margin-bottom:15px; text-transform: uppercase;">СТАТИСТИКА ПО КАРТАМ</h3>
                     <table id="map-stats-table" style="width:100%;">
@@ -493,14 +493,12 @@
                 </div>
             </div>
 
-            <!-- ВОЗВРАЩЕНО: Сводка -->
             <div class="stats-summary" style="margin-top:25px;">
                 <div><span style="color:var(--text-muted);">Всего:</span> <strong id="stat-total-players">0</strong></div>
                 <div><span style="color:var(--text-muted);">В отрядах:</span> <strong id="stat-in-squads">0</strong></div>
                 <div><span style="color:var(--text-muted);">Резерв:</span> <strong id="stat-free">0</strong></div>
             </div>
             
-            <!-- ВОЗВРАЩЕНО: Средние показатели -->
             <div class="analytics-card" style="margin-top: 25px;">
                 <h3 style="color:var(--accent-color); text-align:center; margin-top:0; text-transform: uppercase;">Средние</h3>
                 <div class="stats-summary" style="margin-top:15px; flex-wrap:wrap;">
