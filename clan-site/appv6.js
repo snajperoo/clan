@@ -824,16 +824,30 @@ async function deleteTournament() {
 async function loadAllMissed() {
     const tbody = document.getElementById('missed-table-body');
     if (!tbody) return;
+
+    // 1. Загружаем актуальный список игроков, чтобы отфильтровать кикнутых
+    let qP = supabaseClient.from('players').select('*');
+    qP = filterBySeason(qP);
+    const { data: p } = await qP;
+    if (p) {
+        allPlayers = p;
+        activePlayers = p.filter(x => !x.status || x.status === 'в клане');
+    }
+    const activePlayerIds = new Set(activePlayers.map(x => x.id));
     
     let q = supabaseClient.from('attendance').select('*, players(nickname)').eq('status', 'Не пришел').order('tournament_number', { ascending: true });
     q = filterBySeason(q);
     const { data, error } = await q;
 
     if (error) { tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red;">Ошибка</td></tr>`; return; }
-    if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:green;">Прогулов нет</td></tr>'; return; }
+    
+    // 2. Оставляем только тех, кто сейчас в клане или в обработке
+    const filteredData = (data || []).filter(item => activePlayerIds.has(item.player_id));
+
+    if (filteredData.length === 0) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:green;">Прогулов нет</td></tr>'; return; }
 
     const grouped = {};
-    data.forEach(item => {
+    filteredData.forEach(item => {
         const pId = item.player_id, nick = item.players ? item.players.nickname : 'Удален';
         if (!grouped[pId]) grouped[pId] = { id: pId, nickname: nick, stages: [] };
         grouped[pId].stages.push(item.tournament_number);
@@ -1241,24 +1255,19 @@ async function loadAnalytics() {
     if (!players) return; 
     const active = players.filter(p => !p.status || p.status === 'в клане');
     
-    // ТОП КД
     const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10);
     document.querySelector('#top-kd-table tbody').innerHTML = topKD.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kd}</td></tr>`).join('');
     
-    // ТОП КДА
     const topKDA = [...active].sort((a, b) => b.kda - a.kda).slice(0, 10);
     document.querySelector('#top-kda-table tbody').innerHTML = topKDA.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kda}</td></tr>`).join('');
     
-    // ТОП ОЧКИ
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
     document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
     
-    // СВОДКА
     document.getElementById('stat-total-players').innerText = active.length;
     const inS = active.filter(p => p.squad && p.squad.trim() !== '').length;
     document.getElementById('stat-in-squads').innerText = inS; document.getElementById('stat-free').innerText = active.length - inS;
 
-    // СТАТИСТИКА ПО КАРТАМ
     let qMatches = supabaseClient.from('clan_matches').select('*');
     qMatches = filterBySeason(qMatches);
     const { data: matches } = await qMatches;
@@ -1281,7 +1290,6 @@ async function loadAnalytics() {
         mapStatsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных</td></tr>';
     }
 
-    // СРЕДНИЕ ПОКАЗАТЕЛИ
     if (active.length > 0) {
         const sumKd = active.reduce((acc, p) => acc + (p.kd || 0), 0);
         const sumKda = active.reduce((acc, p) => acc + (p.kda || 0), 0);
