@@ -24,7 +24,7 @@
         .ts-dropdown .option:hover { background-color: rgba(255,255,255,0.05); }
         .ts-control > input { color: var(--text-color) !important; }
         * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-color); margin: 0; padding: 0; transition: 0.3s; min-height: 100vh; font-size: 13px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-color); margin: 0; padding: 0; transition: 0.3s; min-height: 100vh; font-size: 14px; }
         .container { max-width: 1600px; margin: 0 auto; padding: 10px 15px; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg-color); }
@@ -35,105 +35,113 @@
         .theme-toggle { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: var(--radius); cursor: pointer; font-weight: bold; text-transform: uppercase; transition: all 0.2s ease; font-size: 0.85em; }
         .theme-toggle:hover { background: var(--border-color); border-color: var(--accent-color); }
         .tabs { display: flex; justify-content: center; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; }
-        .tab-btn { background-color: var(--panel-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: var(--radius); cursor: pointer; font-size: 0.85em; font-weight: bold; text-transform: uppercase; transition: all 0.2s ease; }
+        .tab-btn { background-color: var(--panel-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 8px 15px; border-radius: var(--radius); cursor: pointer; font-size: 0.9em; font-weight: bold; text-transform: uppercase; transition: all 0.2s ease; }
         .tab-btn:hover { border-color: var(--accent-color); background: rgba(255,152,0,0.1); }
         .tab-btn.active { background: var(--accent-color); color: #000; border-color: var(--accent-color); box-shadow: 0 0 10px var(--accent-glow); }
         .tab-content { display: none; background-color: var(--panel-bg); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border-color); box-shadow: 0 5px 20px rgba(0,0,0,0.5); animation: fadeIn 0.3s ease; }
         .tab-content.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-        th, td { padding: 6px 8px; text-align: left; font-size: 0.85em; border-bottom: 1px solid var(--border-color); font-family: 'Courier New', monospace; }
-        th { background-color: #111411; color: var(--accent-color); font-weight: bold; text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px; border-bottom: 2px solid var(--accent-color); }
+        th, td { padding: 8px 10px; text-align: left; font-size: 0.9em; border-bottom: 1px solid var(--border-color); font-family: 'Courier New', monospace; }
+        th { background-color: #111411; color: var(--accent-color); font-weight: bold; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 2px solid var(--accent-color); }
         tr { transition: background 0.2s; }
         tr:hover { background-color: rgba(255, 152, 0, 0.05); }
-        .form-group { margin-bottom: 8px; }
-        .form-group label { display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-        .form-group input:not([type="checkbox"]):not([type="time"]):not([type="date"]), .form-group select { width: 100%; padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 0.9em; font-family: 'Courier New', monospace; transition: all 0.2s ease; }
-        .form-group input[type="date"], .form-group input[type="time"] { width: 100%; padding: 5px 10px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 0.9em; font-family: 'Courier New', monospace; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 0.8em; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .form-group input:not([type="checkbox"]):not([type="time"]):not([type="date"]), .form-group select { width: 100%; padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 0.95em; font-family: 'Courier New', monospace; transition: all 0.2s ease; }
+        .form-group input[type="date"], .form-group input[type="time"] { width: 100%; padding: 7px 10px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 0.95em; font-family: 'Courier New', monospace; }
         .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 8px var(--accent-glow); }
         .checkbox-group { display: flex; align-items: center; gap: 8px; margin-top: 15px; }
-        .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color); }
-        .checkbox-group label { margin: 0; cursor: pointer; color: var(--text-color); font-size: 0.9em; font-weight: bold; text-transform: uppercase; }
-        .btn { padding: 6px 12px; border-radius: var(--radius); border: none; background: var(--success-color); color: #000; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: all 0.2s ease; font-family: 'Courier New', monospace; font-size: 0.85em; }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color); }
+        .checkbox-group label { margin: 0; cursor: pointer; color: var(--text-color); font-size: 0.95em; font-weight: bold; text-transform: uppercase; }
+        .btn { padding: 8px 15px; border-radius: var(--radius); border: none; background: var(--success-color); color: #000; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: all 0.2s ease; font-family: 'Courier New', monospace; font-size: 0.85em; }
         .btn:hover { background: #66bb6a; box-shadow: 0 0 10px rgba(76, 175, 80, 0.4); }
         .btn-danger { background: var(--danger-color); color: #fff; }
         .btn-danger:hover { background: #ef5350; box-shadow: 0 0 10px rgba(229, 57, 53, 0.4); }
-        .profile-layout { display: flex; gap: 15px; height: calc(100vh - 180px); }
-        .player-list-panel { width: 280px; background: var(--card-bg); border-radius: var(--radius); display: flex; flex-direction: column; border: 1px solid var(--border-color); overflow: hidden; }
-        .player-list-header { padding: 10px; background: #111411; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .player-list { flex: 1; overflow-y: auto; padding: 5px; }
-        .player-item { padding: 8px; margin-bottom: 5px; background: #1a1e1a; border-radius: var(--radius); cursor: pointer; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; font-family: 'Courier New', monospace; font-size: 0.85em; }
-        .player-item:hover, .player-item.active { border-color: var(--accent-color); background: rgba(255, 152, 0, 0.1); transform: translateX(2px); }
-        .profile-form-panel { flex: 1; background: var(--card-bg); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border-color); overflow-y: auto; }
-        .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
-        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .form-section-title { grid-column: 1 / -1; color: var(--accent-color); margin: 10px 0 5px 0; border-bottom: 2px dashed var(--border-color); padding-bottom: 5px; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .profile-layout { display: flex; gap: 20px; height: calc(100vh - 200px); }
+        .player-list-panel { width: 380px; background: var(--card-bg); border-radius: var(--radius); display: flex; flex-direction: column; border: 1px solid var(--border-color); overflow: hidden; }
+        .player-list-header { padding: 12px 15px; background: #111411; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .player-list { flex: 1; overflow-y: auto; padding: 8px; }
+        .player-item { padding: 10px 12px; margin-bottom: 6px; background: #1a1e1a; border-radius: var(--radius); cursor: pointer; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; font-family: 'Courier New', monospace; font-size: 0.95em; }
+        .player-item:hover, .player-item.active { border-color: var(--accent-color); background: rgba(255, 152, 0, 0.1); transform: translateX(3px); }
+        
+        .profile-form-panel { flex: 1; background: var(--card-bg); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border-color); overflow-y: auto; }
+        .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 10px; }
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-section-title { grid-column: 1 / -1; color: var(--accent-color); margin: 15px 0 10px 0; border-bottom: 2px dashed var(--border-color); padding-bottom: 5px; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; }
+        
         .roster-layout { display: flex; gap: 15px; align-items: flex-start; }
-        .roster-board { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; align-items: start; }
-        .squad-card { background: var(--card-bg); border-radius: var(--radius); padding: 10px; border: 1px solid var(--border-color); height: max-content; display: flex; flex-direction: column; }
-        .squad-title { text-align: center; color: var(--accent-color); font-weight: bold; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 2px solid var(--border-color); text-transform: uppercase; letter-spacing: 1px; font-size: 0.9em; }
-        .role-slot { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; margin-bottom: 3px; border-radius: var(--radius); background: #111411; border: 1px solid var(--border-color); min-height: 35px; transition: 0.2s; }
+        .roster-board { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; align-items: start; }
+        .squad-card { background: var(--card-bg); border-radius: var(--radius); padding: 12px; border: 1px solid var(--border-color); height: max-content; display: flex; flex-direction: column; }
+        .squad-title { text-align: center; color: var(--accent-color); font-weight: bold; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid var(--border-color); text-transform: uppercase; letter-spacing: 1px; font-size: 1em; }
+        .role-slot { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin-bottom: 4px; border-radius: var(--radius); background: #111411; border: 1px solid var(--border-color); min-height: 40px; transition: 0.2s; }
         .role-slot.drag-over { border-color: var(--success-color); background: rgba(76, 175, 80, 0.1); transform: scale(1.02); }
-        .role-slot span { font-size: 0.85em; font-weight: bold; word-break: break-word; font-family: 'Courier New', monospace; }
-        .free-players-panel { width: 260px; background: var(--card-bg); border-radius: var(--radius); padding: 10px; border: 1px solid var(--border-color); position: sticky; top: 10px; min-height: 200px; }
-        .free-player-item { background: #111411; padding: 6px 8px; border-radius: var(--radius); margin-bottom: 5px; cursor: grab; border: 1px solid var(--border-color); display: flex; justify-content: space-between; transition: 0.2s; font-family: 'Courier New', monospace; font-weight: bold; font-size: 0.85em;}
+        .role-slot span { font-size: 0.9em; font-weight: bold; word-break: break-word; font-family: 'Courier New', monospace; }
+        .free-players-panel { width: 300px; background: var(--card-bg); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border-color); position: sticky; top: 10px; min-height: 200px; }
+        .free-player-item { background: #111411; padding: 8px 10px; border-radius: var(--radius); margin-bottom: 6px; cursor: grab; border: 1px solid var(--border-color); display: flex; justify-content: space-between; transition: 0.2s; font-family: 'Courier New', monospace; font-weight: bold; font-size: 0.9em;}
         .free-player-item:hover { border-color: var(--accent-color); }
         .free-player-item.dragging { opacity: 0.5; transform: scale(0.95); }
+        
         .attendance-table, .stats-table { width: 100%; border-collapse: collapse; background: transparent; }
-        .attendance-table th, .attendance-table td, .stats-table th, .stats-table td { padding: 4px; text-align: center; font-size: 0.8em; border: 1px solid var(--border-color); background: var(--card-bg); font-family: 'Courier New', monospace; }
+        .attendance-table th, .attendance-table td, .stats-table th, .stats-table td { padding: 6px; text-align: center; font-size: 0.85em; border: 1px solid var(--border-color); background: var(--card-bg); font-family: 'Courier New', monospace; }
         .attendance-table th, .stats-table th { background: #111411; color: var(--accent-color); }
         .attendance-table tr td:first-child, .stats-table tr td:first-child { text-align: left; font-weight: bold; }
-        .attendance-table select { width: 100%; padding: 2px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius); font-family: 'Courier New', monospace; font-size: 0.9em; }
-        .stats-table input { width: 35px; padding: 2px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius); text-align: center; font-family: 'Courier New', monospace; font-size: 0.9em; }
+        .attendance-table select { width: 100%; padding: 4px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius); font-family: 'Courier New', monospace; font-size: 0.9em; }
+        .stats-table input { width: 40px; padding: 4px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius); text-align: center; font-family: 'Courier New', monospace; font-size: 0.9em; }
+        
         .status-1 { color: var(--success-color); font-weight: bold; }
         .status-2 { color: var(--danger-color); font-weight: bold; }
         .status-3 { color: var(--accent-color); font-weight: bold; }
         .stage-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
-        .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
-        .analytics-card { background: var(--card-bg); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border-color); }
+        .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .analytics-card { background: var(--card-bg); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border-color); }
         .analytics-card table { border-collapse: collapse; }
-        .analytics-card th, .analytics-card td { padding: 6px; border-bottom: 1px solid var(--border-color); text-align: left; }
+        .analytics-card th, .analytics-card td { padding: 8px; border-bottom: 1px solid var(--border-color); text-align: left; }
         .analytics-card td:first-child { font-weight: bold; color: var(--accent-color); width: 30px; }
-        .stats-summary { display: flex; justify-content: space-around; text-align: center; font-size: 1em; margin-top: 15px; flex-wrap: wrap; gap: 10px; }
-        .stats-summary div { background: var(--card-bg); padding: 10px 15px; border-radius: var(--radius); border: 1px solid var(--border-color); }
+        .stats-summary { display: flex; justify-content: space-around; text-align: center; font-size: 1.1em; margin-top: 15px; flex-wrap: wrap; gap: 15px; }
+        .stats-summary div { background: var(--card-bg); padding: 15px 20px; border-radius: var(--radius); border: 1px solid var(--border-color); }
+        
         .admin-tab.tab-btn { display: none !important; }
         body.is-admin .admin-tab.tab-btn { display: inline-block !important; }
-        .missed-select { padding: 2px 5px; border-radius: var(--radius); background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); font-size: 0.85em; font-family: 'Courier New', monospace; }
+        .missed-select { padding: 4px; border-radius: var(--radius); background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); font-size: 0.85em; font-family: 'Courier New', monospace; }
         .modal-overlay { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(5px); animation: fadeIn 0.2s; }
-        .modal-content { background: var(--panel-bg); padding: 20px; border-radius: var(--radius); width: 100%; max-width: 500px; border: 1px solid var(--accent-color); box-shadow: 0 0 30px rgba(255, 152, 0, 0.2); }
-        .search-input { width: 100%; padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 0.9em; margin-bottom: 10px; font-family: 'Courier New', monospace; }
+        .modal-content { background: var(--panel-bg); padding: 25px; border-radius: var(--radius); width: 100%; max-width: 500px; border: 1px solid var(--accent-color); box-shadow: 0 0 30px rgba(255, 152, 0, 0.2); }
+        .search-input { width: 100%; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); font-size: 0.95em; margin-bottom: 15px; font-family: 'Courier New', monospace; }
         .search-input:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 8px var(--accent-glow); }
-        .compare-table { width: 100%; border-collapse: collapse; margin-top: 15px; background: var(--card-bg); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-color); }
-        .compare-table th, .compare-table td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--border-color); font-family: 'Courier New', monospace; font-size: 0.85em; }
-        .compare-table th { background: #111411; font-size: 0.9em; color: var(--text-color); font-weight: bold; text-transform: uppercase; }
+        .compare-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--card-bg); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-color); }
+        .compare-table th, .compare-table td { padding: 10px 15px; text-align: center; border-bottom: 1px solid var(--border-color); font-family: 'Courier New', monospace; font-size: 0.9em; }
+        .compare-table th { background: #111411; font-size: 1em; color: var(--text-color); font-weight: bold; text-transform: uppercase; }
         .compare-table th:first-child { text-align: left; color: var(--text-muted); width: 25%; }
         .compare-table td:first-child { text-align: left; font-weight: 500; color: var(--text-muted); }
         .compare-table tr:hover { background: rgba(255,152,0,0.05); }
         .compare-winner { color: var(--success-color); font-weight: bold; text-shadow: 0 0 5px rgba(76, 175, 80, 0.4); }
         
-        /* ГОРИЗОНТАЛЬНАЯ ИСТОРИЯ */
         .horizontal-history { display: flex; flex-direction: row; gap: 15px; overflow-x: auto; padding: 10px 0; scroll-behavior: smooth; }
-        .history-card { min-width: 250px; background: var(--card-bg); border-radius: var(--radius); padding: 10px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 5px; }
+        .history-card { min-width: 260px; background: var(--card-bg); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 5px; }
         .history-card.win { border-color: var(--success-color); }
         .history-card.loss { border-color: var(--danger-color); }
 
-        #toast-container { position: fixed; top: 15px; right: 15px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
-        .toast { padding: 10px 15px; border-radius: var(--radius); font-weight: bold; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards; display: flex; align-items: center; gap: 10px; min-width: 200px; color: #000; text-transform: uppercase; font-family: 'Courier New', monospace; font-size: 0.85em;}
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 12px 20px; border-radius: var(--radius); font-weight: bold; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards; display: flex; align-items: center; gap: 10px; min-width: 250px; color: #000; text-transform: uppercase; font-family: 'Courier New', monospace; font-size: 0.9em;}
         .toast-success { background: var(--success-color); border-left: 5px solid #2e7d32; }
         .toast-error { background: var(--danger-color); color: #fff; border-left: 5px solid #b71c1c; }
         .toast-info { background: var(--accent-color); border-left: 5px solid #e65100; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
-        /* Сворачиваемые турниры */
-        details.tournament-group { margin-bottom: 10px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: var(--radius); }
-        details.tournament-group summary { padding: 8px 12px; background: var(--card-bg); cursor: pointer; font-weight: bold; color: var(--accent-color); text-transform: uppercase; border-radius: var(--radius); outline: none; }
+        details.tournament-group { margin-bottom: 15px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: var(--radius); }
+        details.tournament-group summary { padding: 10px 15px; background: var(--card-bg); cursor: pointer; font-weight: bold; color: var(--accent-color); text-transform: uppercase; border-radius: var(--radius); outline: none; font-size: 1.05em; }
         details.tournament-group[open] summary { border-bottom: 1px solid var(--border-color); border-radius: var(--radius) var(--radius) 0 0; }
-        .tournament-content { padding: 10px; overflow-x: auto; }
+        .tournament-content { padding: 15px; overflow-x: auto; }
+
+        /* Увеличенные бейджики заметок */
+        .badge-coach { background: #4caf50; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-left: 8px; display: inline-block; }
+        .badge-tk { background: #9cdcfe; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-left: 4px; display: inline-block; }
 
         @media (max-width: 992px) {
             .profile-layout { flex-direction: column; height: auto; }
-            .player-list-panel { width: 100%; max-height: 250px; }
+            .player-list-panel { width: 100%; max-height: 400px; }
             .roster-layout { flex-direction: column; }
             .free-players-panel { width: 100%; position: static; }
             .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
@@ -151,7 +159,6 @@
                 <div style="display:flex; align-items:center; gap:5px; background:var(--card-bg); padding:4px 8px; border-radius:var(--radius); border:1px solid var(--border-color);">
                     <span style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase;">Сезон:</span>
                     <select id="season-selector" onchange="switchViewingSeason(this.value)" style="background:transparent; color:var(--accent-color); border:none; padding:2px; font-family:'Courier New', monospace; font-weight:bold; cursor:pointer; font-size:0.9em; outline:none;">
-                        <!-- Заполняется через JS -->
                     </select>
                 </div>
 
@@ -162,12 +169,13 @@
                     <button class="btn" onclick="openSeasonModal()" style="background:var(--success-color); color:#000; font-size:0.75em;">+ Сезон</button>
                 </div>
 
-                <button class="theme-toggle" id="logout-btn" onclick="logout()" style="display:none; font-size:0.75em;">Выход</button>
+                <button class="theme-toggle" id="logout-btn" onclick="logout()" style="display:none; font-size:0.8em;">Выход</button>
             </div>
         </div>
         
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab(event, 'tab-tops')">Топы</button>
+            <!-- Мой профиль теперь только для игроков, админ его не видит -->
             <button class="tab-btn" id="my-profile-tab" onclick="openTab(event, 'tab-my-profile')" style="display:none;">Мой профиль</button>
             <button class="tab-btn admin-tab" onclick="openTab(event, 'tab-profile')">База игроков</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-roster')">Состав</button>
@@ -192,13 +200,13 @@
             </div>
         </div>
 
-        <!-- МОЙ ПРОФИЛЬ -->
+        <!-- МОЙ ПРОФИЛЬ (Только для игроков) -->
         <div id="tab-my-profile" class="tab-content">
-            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 15px; text-transform: uppercase;">Личный кабинет</h2>
+            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Личный кабинет</h2>
             <div id="my-profile-content" style="display:none;">
-                <div class="analytics-card" style="margin-bottom:15px;">
+                <div class="analytics-card" style="margin-bottom:20px;">
                     <h3 style="color:var(--accent-color); text-align:center; margin-top:0; text-transform: uppercase;">Моя статистика (сезон)</h3>
-                    <div class="stats-summary" style="margin-top:10px;">
+                    <div class="stats-summary" style="margin-top:15px;">
                         <div><span style="color:var(--text-muted);">КД:</span> <strong id="my-kd">0</strong></div>
                         <div><span style="color:var(--text-muted);">КДА:</span> <strong id="my-kda">0</strong></div>
                         <div><span style="color:var(--text-muted);">Очки:</span> <strong id="my-points">0</strong></div>
@@ -212,12 +220,12 @@
         <div id="tab-profile" class="tab-content admin-tab">
             <div class="profile-layout">
                 <div class="player-list-panel">
-                    <div class="player-list-header"><h3 style="margin:0; text-transform: uppercase;">Бойцы</h3><button class="btn" onclick="clearForm()" style="padding:4px 8px; font-size:0.75em;">Новый</button></div>
-                    <div style="padding: 5px; border-bottom: 1px solid var(--border-color);"><input type="text" id="player-search-input" placeholder="ПОИСК..." oninput="filterPlayerList()" class="search-input" style="margin-bottom:0; text-transform: uppercase;"></div>
+                    <div class="player-list-header"><h3 style="margin:0; text-transform: uppercase; font-size:1.1em;">Бойцы</h3><button class="btn" onclick="clearForm()" style="padding:6px 12px; font-size:0.8em;">Новый</button></div>
+                    <div style="padding: 10px; border-bottom: 1px solid var(--border-color);"><input type="text" id="player-search-input" placeholder="ПОИСК..." oninput="filterPlayerList()" class="search-input" style="margin-bottom:0; text-transform: uppercase;"></div>
                     <div class="player-list" id="player-list-container"></div>
                 </div>
                 <div class="profile-form-panel">
-                    <h2 id="form-title" style="margin-top:0; color:var(--accent-color); text-align: center; margin-bottom: 15px; text-transform: uppercase;">Новый боец</h2>
+                    <h2 id="form-title" style="margin-top:0; color:var(--accent-color); text-align: center; margin-bottom: 20px; text-transform: uppercase;">Новый боец</h2>
                     <input type="hidden" id="edit-player-id">
                     <div class="form-grid-3">
                         <div class="form-group"><label>Никнейм</label><input type="text" id="profile-nickname"></div>
@@ -230,11 +238,11 @@
                         <div class="form-group"><label>Очки</label><input type="number" id="profile-points"></div>
                     </div>
                     <div class="form-grid-3"><div class="checkbox-group" style="grid-column: 1 / -1;"><input type="checkbox" id="profile-sledgehammer"><label for="profile-sledgehammer">Кувалда</label></div></div>
-                    <div class="form-grid-2" style="margin-top: 10px;">
+                    <div class="form-grid-2" style="margin-top: 15px;">
                         <div class="form-group"><label>Отряд</label><select id="profile-squad"></select></div>
                         <div class="form-group"><label>Роль</label><select id="profile-role"></select></div>
                     </div>
-                    <div class="form-grid-2" style="margin-top: 10px;">
+                    <div class="form-grid-2" style="margin-top: 15px;">
                         <div class="form-group"><label>Автомат</label><select id="select-rifle"></select></div>
                         <div class="form-group"><label>ПП</label><select id="select-smg"></select></div>
                         <div class="form-group"><label>Пулемет</label><select id="select-machine-gun"></select></div>
@@ -260,31 +268,28 @@
                         </div>
                     </div>
 
-                    <!-- ВЕРТИКАЛЬНАЯ ТАБЛИЦА ПОСЕЩАЕМОСТИ (ПУНКТ 7) -->
                     <h3 class="form-section-title">Посещаемость по турнирам</h3>
-                    <div id="player-attendance-vertical" style="overflow-x: auto; margin-bottom: 15px;">
-                        <!-- Заполняется через JS -->
-                    </div>
+                    <div id="player-attendance-vertical" style="overflow-x: auto; margin-bottom: 15px;"></div>
                     
-                    <div id="player-notes-wrapper" style="margin-top:15px; padding:10px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
-                        <h3 style="color:var(--accent-color); margin-top:0; margin-bottom:8px; text-align:center; font-size:0.9em; text-transform:uppercase;">📝 Заметки тренера</h3>
-                        <div id="player-notes-list" style="max-height:150px; overflow-y:auto; margin-bottom:5px;"></div>
-                        <div class="form-group" style="margin-bottom:5px;">
-                            <textarea id="player-note-input" rows="2" placeholder="Текст заметки..." style="width:100%; padding:5px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-size:0.85em; resize:vertical;"></textarea>
+                    <div id="player-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
+                        <h3 style="color:var(--accent-color); margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📝 Заметки тренера</h3>
+                        <div id="player-notes-list" style="max-height:150px; overflow-y:auto; margin-bottom:8px;"></div>
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <textarea id="player-note-input" rows="2" placeholder="Текст заметки..." style="width:100%; padding:8px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-size:0.9em; resize:vertical;"></textarea>
                         </div>
-                        <button class="btn" onclick="addPlayerNote('coach')" style="width:100%; padding:5px; font-size:0.8em;">+ Добавить</button>
+                        <button class="btn" onclick="addPlayerNote('coach')" style="width:100%; padding:8px;">+ Добавить</button>
                     </div>
 
-                    <div id="player-timekeeper-notes-wrapper" style="margin-top:15px; padding:10px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
-                        <h3 style="color:#9cdcfe; margin-top:0; margin-bottom:8px; text-align:center; font-size:0.9em; text-transform:uppercase;">📋 Заметки табельщика</h3>
-                        <div id="player-timekeeper-notes-list" style="max-height:150px; overflow-y:auto; margin-bottom:5px;"></div>
-                        <div class="form-group" style="margin-bottom:5px;">
-                            <textarea id="player-timekeeper-note-input" rows="2" placeholder="Текст заметки..." style="width:100%; padding:5px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-size:0.85em; resize:vertical;"></textarea>
+                    <div id="player-timekeeper-notes-wrapper" style="margin-top:20px; padding:15px; background:var(--bg-color); border-radius:var(--radius); border:1px solid var(--border-color); display:none;">
+                        <h3 style="color:#9cdcfe; margin-top:0; margin-bottom:12px; text-align:center; font-size:1em; text-transform:uppercase;">📋 Заметки табельщика</h3>
+                        <div id="player-timekeeper-notes-list" style="max-height:150px; overflow-y:auto; margin-bottom:8px;"></div>
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <textarea id="player-timekeeper-note-input" rows="2" placeholder="Текст заметки..." style="width:100%; padding:8px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius); font-size:0.9em; resize:vertical;"></textarea>
                         </div>
-                        <button class="btn" onclick="addPlayerNote('timekeeper')" style="width:100%; padding:5px; font-size:0.8em; background:#9cdcfe;">+ Добавить</button>
+                        <button class="btn" onclick="addPlayerNote('timekeeper')" style="width:100%; padding:8px; background:#9cdcfe;">+ Добавить</button>
                     </div>
 
-                    <div style="margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <div style="margin-top:25px; display:flex; gap:10px; flex-wrap:wrap;">
                         <button class="btn" onclick="saveProfile()">Сохранить</button>
                         <button class="btn" style="background:var(--accent-color);" onclick="recalculatePlayerStats(currentEditId)">Пересчитать</button>
                         <button class="btn btn-danger" onclick="deletePlayer()" id="btn-delete" style="display:none;">Удалить</button>
@@ -315,8 +320,8 @@
 
         <!-- СРАВНЕНИЕ -->
         <div id="tab-compare" class="tab-content">
-            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 15px; text-transform: uppercase;">Сравнение</h2>
-            <div style="max-width: 900px; margin: 0 auto 15px auto;">
+            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Сравнение</h2>
+            <div style="max-width: 900px; margin: 0 auto 25px auto;">
                 <div class="form-grid-2">
                     <div class="form-group"><label>Бойцы (до 4-х)</label><select id="compare-players" multiple></select></div>
                     <div class="form-group"><label>Период</label><select id="compare-period"></select></div>
@@ -327,31 +332,31 @@
             </div>
         </div>
 
-        <!-- ИСТОРИЯ (ГОРИЗОНТАЛЬНАЯ) -->
+        <!-- ИСТОРИЯ -->
         <div id="tab-history" class="tab-content">
             <div class="stage-header">
                 <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">История матчей</h2>
             </div>
             
-            <div class="analytics-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom: 15px;">
+            <div class="analytics-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom: 20px;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform: uppercase;">Общая диагностика</h3>
-                <div style="display:flex; justify-content:center; gap:15px; margin-bottom:15px; width:100%; flex-wrap:wrap;">
-                    <div style="background:rgba(255,152,0,0.1); border:2px solid var(--accent-color); border-radius:var(--radius); padding:10px 20px; text-align:center; flex:1; min-width:150px;">
-                        <div style="color:var(--accent-color); font-size:0.8em; text-transform:uppercase; font-weight:bold; margin-bottom:5px;">Рейтинг</div>
-                        <div><strong id="hr-rating" style="color:var(--accent-color); font-size:2em; font-family:'Courier New', monospace;">1000</strong></div>
+                <div style="display:flex; justify-content:center; gap:20px; margin-bottom:20px; width:100%; flex-wrap:wrap;">
+                    <div style="background:rgba(255,152,0,0.1); border:2px solid var(--accent-color); border-radius:var(--radius); padding:15px 25px; text-align:center; flex:1; min-width:150px;">
+                        <div style="color:var(--accent-color); font-size:0.85em; text-transform:uppercase; font-weight:bold; margin-bottom:5px;">Рейтинг</div>
+                        <div><strong id="hr-rating" style="color:var(--accent-color); font-size:2.2em; font-family:'Courier New', monospace;">1000</strong></div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.05); border:2px solid #555; border-radius:var(--radius); padding:10px 20px; text-align:center; flex:1; min-width:150px;">
-                        <div style="color:var(--text-muted); font-size:0.8em; text-transform:uppercase; font-weight:bold; margin-bottom:5px;">Тир</div>
-                        <div><strong id="hr-tier" style="color:var(--accent-color); font-size:2em; font-family:'Courier New', monospace;">E</strong></div>
+                    <div style="background:rgba(255,255,255,0.05); border:2px solid #555; border-radius:var(--radius); padding:15px 25px; text-align:center; flex:1; min-width:150px;">
+                        <div style="color:var(--text-muted); font-size:0.85em; text-transform:uppercase; font-weight:bold; margin-bottom:5px;">Тир</div>
+                        <div><strong id="hr-tier" style="color:var(--accent-color); font-size:2.2em; font-family:'Courier New', monospace;">E</strong></div>
                     </div>
-                    <div style="background:rgba(156,220,254,0.05); border:2px solid #9cdcfe; border-radius:var(--radius); padding:10px 20px; text-align:center; flex:1; min-width:150px;">
-                        <div style="color:#9cdcfe; font-size:0.8em; text-transform:uppercase; font-weight:bold; margin-bottom:5px;">Гильзы</div>
-                        <div><strong id="hr-gears" style="color:#9cdcfe; font-size:2em; font-family:'Courier New', monospace;">0</strong></div>
+                    <div style="background:rgba(156,220,254,0.05); border:2px solid #9cdcfe; border-radius:var(--radius); padding:15px 25px; text-align:center; flex:1; min-width:150px;">
+                        <div style="color:#9cdcfe; font-size:0.85em; text-transform:uppercase; font-weight:bold; margin-bottom:5px;">Гильзы</div>
+                        <div><strong id="hr-gears" style="color:#9cdcfe; font-size:2.2em; font-family:'Courier New', monospace;">0</strong></div>
                     </div>
                 </div>
-                <div style="display:flex; gap:20px; align-items:center;">
-                    <div style="width: 120px; height: 120px;"><canvas id="matchHistoryChart"></canvas></div>
-                    <div id="history-winrate" style="display:flex; flex-direction:column; gap:5px; font-size:0.9em; font-family:'Courier New', monospace;">
+                <div style="display:flex; gap:30px; align-items:center;">
+                    <div style="width: 150px; height: 150px;"><canvas id="matchHistoryChart"></canvas></div>
+                    <div id="history-winrate" style="display:flex; flex-direction:column; gap:8px; font-size:1em; font-family:'Courier New', monospace;">
                         <div><span style="color:var(--text-muted);">Победы:</span> <strong id="hr-wins" style="color:var(--success-color);">0</strong> <span id="hr-wins-pct" style="color:var(--text-muted);">(0%)</span></div>
                         <div><span style="color:var(--text-muted);">Поражения:</span> <strong id="hr-losses" style="color:var(--danger-color);">0</strong> <span id="hr-losses-pct" style="color:var(--text-muted);">(0%)</span></div>
                         <div><span style="color:var(--text-muted);">Ничьи:</span> <strong id="hr-draws" style="color:var(--accent-color);">0</strong> <span id="hr-draws-pct" style="color:var(--text-muted);">(0%)</span></div>
@@ -360,9 +365,8 @@
                 </div>
             </div>
             
-            <div style="display:flex; justify-content:center; margin-bottom: 15px;" class="admin-only"><button class="btn" onclick="addMatchHistory()">Добавить матч</button></div>
+            <div style="display:flex; justify-content:center; margin-bottom: 20px;" class="admin-only"><button class="btn" onclick="addMatchHistory()">Добавить матч</button></div>
             
-            <!-- ГОРИЗОНТАЛЬНЫЙ КОНТЕЙНЕР -->
             <div class="horizontal-history" id="history-timeline"></div>
         </div>
 
@@ -370,7 +374,7 @@
         <div id="tab-calendar" class="tab-content">
             <div class="stage-header"><h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">📅 Календарь</h2></div>
             
-            <div class="admin-only" style="background:var(--card-bg); padding:15px; border-radius:var(--radius); margin-bottom:15px; border:1px solid var(--border-color); display:none;">
+            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--border-color); display:none;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать</h3>
                 <div class="form-grid-3">
                     <div class="form-group"><label>Дата</label><input type="date" id="cal-date"></div>
@@ -384,7 +388,7 @@
                 <button class="btn" onclick="addUpcomingMatch()" style="margin-top:10px;">Добавить</button>
             </div>
 
-            <div class="admin-only" style="background:var(--card-bg); padding:15px; border-radius:var(--radius); margin-bottom:15px; border:1px solid var(--accent-color); display:none;">
+            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--accent-color); display:none;">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">⚡ Массовое заполнение</h3>
                 <div class="form-grid-2">
                     <div class="form-group"><label>Начало</label><input type="date" id="bulk-start"></div>
@@ -394,7 +398,7 @@
                     <div class="form-group"><label>Стартовый турнир</label><input type="number" id="bulk-start-tournament" value="1"></div>
                     <div class="form-group"><label>Время</label><input type="time" id="bulk-time" value="19:00"></div>
                 </div>
-                <div class="form-group" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:5px;">
+                <div class="form-group" style="display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">
                     <label><input type="checkbox" class="bulk-day" value="1"> Пн</label>
                     <label><input type="checkbox" class="bulk-day" value="2"> Вт</label>
                     <label><input type="checkbox" class="bulk-day" value="3"> Ср</label>
@@ -411,8 +415,8 @@
 
         <!-- ШТРАФЫ -->
         <div id="tab-fines" class="tab-content admin-tab">
-            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 15px; text-transform: uppercase;">Штрафы</h2>
-            <div style="background:var(--card-bg); padding:10px; border-radius:var(--radius); margin-bottom:15px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; border:1px solid var(--border-color);">
+            <h2 style="text-align:center; color:var(--accent-color); margin-bottom: 20px; text-transform: uppercase;">Штрафы</h2>
+            <div style="background:var(--card-bg); padding:15px; border-radius:var(--radius); margin-bottom:20px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; border:1px solid var(--border-color);">
                 <div class="form-group" style="flex:2; margin:0;"><label>Боец</label><select id="fine-player"></select></div>
                 <div class="form-group" style="flex:2; margin:0;"><label>Причина</label><input type="text" id="fine-reason"></div>
                 <div class="form-group" style="flex:1; margin:0;"><label>Сумма</label><input type="number" id="fine-amount"></div>
@@ -421,7 +425,7 @@
             <table><thead><tr><th>Боец</th><th>Причина</th><th>Сумма</th><th>Статус</th><th>Действия</th></tr></thead><tbody id="fines-table-body"></tbody></table>
         </div>
 
-        <!-- ПОСЕЩАЕМОСТЬ (СВОРАЧИВАЕМАЯ) -->
+        <!-- ПОСЕЩАЕМОСТЬ -->
         <div id="tab-attendance" class="tab-content admin-tab">
             <div class="stage-header">
                 <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Посещаемость</h2>
@@ -432,10 +436,10 @@
                 </div>
             </div>
             <input type="text" id="attendance-search" placeholder="ПОИСК..." oninput="loadAttendance()" class="search-input">
-            <div style="background:var(--card-bg); padding:10px; border-radius:var(--radius); margin-bottom:15px; border:1px solid var(--border-color);">
-                <button class="btn" onclick="document.getElementById('attendance-photo').click()" style="width:100%; padding:10px; font-size:1em; background:var(--accent-color); color:#000;">ЗАГРУЗИТЬ ФОТО</button>
+            <div style="background:var(--card-bg); padding:15px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--border-color);">
+                <button class="btn" onclick="document.getElementById('attendance-photo').click()" style="width:100%; padding:12px; font-size:1.1em; background:var(--accent-color); color:#000;">ЗАГРУЗИТЬ ФОТО</button>
                 <input type="file" id="attendance-photo" multiple accept="image/*" style="display:none;" onchange="openPhotoModal(this)">
-                <div id="photo-status" style="color:var(--success-color); font-weight:bold; text-align:center; margin-top:10px; font-size:0.95em; text-transform: uppercase;"></div>
+                <div id="photo-status" style="color:var(--success-color); font-weight:bold; text-align:center; margin-top:15px; font-size:1em; text-transform: uppercase;"></div>
             </div>
             <div id="attendance-container"></div>
         </div>
@@ -446,7 +450,7 @@
             <div style="overflow-x: auto;"><table class="attendance-table"><thead><tr><th style="width: 20%;">Боец</th><th style="width: 15%;">Кол-во</th><th style="width: 65%;">Детали</th></tr></thead><tbody id="missed-table-body"></tbody></table></div>
         </div>
 
-        <!-- СТАТИСТИКА (СВОРАЧИВАЕМАЯ) -->
+        <!-- СТАТИСТИКА -->
         <div id="tab-stats" class="tab-content admin-tab">
             <div class="stage-header">
                 <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Статистика</h2>
@@ -463,22 +467,22 @@
         <div id="tab-analytics" class="tab-content">
             <div class="stage-header">
                 <h2 style="text-align:center; color:var(--accent-color); margin:0; text-transform: uppercase;">Аналитика</h2>
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
                     <button class="btn" onclick="sendAnalyticsScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
                 </div>
             </div>
             
             <div class="analytics-grid">
                 <div class="analytics-card">
-                    <h3 style="color:var(--accent-color); text-align:center; margin-bottom:10px; text-transform: uppercase; font-size:1em;">ТОП КД</h3>
+                    <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП КД</h3>
                     <table id="top-kd-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>КД</th></tr></thead><tbody></tbody></table>
                 </div>
                 <div class="analytics-card">
-                    <h3 style="color:var(--success-color); text-align:center; margin-bottom:10px; text-transform: uppercase; font-size:1em;">ТОП КДА</h3>
+                    <h3 style="color:var(--success-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП КДА</h3>
                     <table id="top-kda-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>КДА</th></tr></thead><tbody></tbody></table>
                 </div>
                 <div class="analytics-card">
-                    <h3 style="color:var(--accent-color); text-align:center; margin-bottom:10px; text-transform: uppercase; font-size:1em;">ТОП ОЧКИ</h3>
+                    <h3 style="color:var(--accent-color); text-align:center; margin-bottom:15px; text-transform: uppercase;">ТОП ОЧКИ</h3>
                     <table id="top-points-table" style="width:100%;"><thead><tr><th>#</th><th>Боец</th><th>Очки</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
@@ -489,10 +493,10 @@
     <div id="login-modal" class="modal-overlay" style="display:flex;">
         <div class="modal-content" style="text-align:center;">
             <h2 style="color:var(--accent-color); margin-top:0; text-transform: uppercase;">Вход</h2>
-            <p style="color:var(--text-muted); font-size:0.9em; margin-bottom:15px;">Введите Никнейм или Пароль</p>
+            <p style="color:var(--text-muted); font-size:0.9em; margin-bottom:20px;">Введите Никнейм или Пароль</p>
             <div class="form-group"><input type="text" id="login-input" placeholder="НИК / ПАРОЛЬ" style="text-align:center; font-size:1.1em;"></div>
-            <button class="btn" style="width:100%; padding:10px; font-size:1.1em;" onclick="checkLogin()">Войти</button>
-            <div id="login-error" style="color:var(--danger-color); margin-top:10px; font-weight:bold;"></div>
+            <button class="btn" style="width:100%; padding:12px; font-size:1.1em;" onclick="checkLogin()">Войти</button>
+            <div id="login-error" style="color:var(--danger-color); margin-top:15px; font-weight:bold;"></div>
         </div>
     </div>
     
@@ -503,7 +507,7 @@
                 <label>Этап</label>
                 <select id="modal-stage"></select>
             </div>
-            <div id="photo-preview" style="text-align:center; margin-bottom:15px; display:none;"></div>
+            <div id="photo-preview" style="text-align:center; margin-bottom:20px; display:none;"></div>
             <button class="btn" style="width:100%; margin-bottom:10px;" onclick="confirmPhotoUpload()">РАСПОЗНАТЬ</button>
             <button class="btn btn-danger" style="width:100%;" onclick="closePhotoModal()">ОТМЕНА</button>
         </div>
@@ -512,7 +516,7 @@
     <div id="absent-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="max-height: 80vh; display:flex; flex-direction:column;">
             <h3 style="text-align:center; color:var(--danger-color); margin-top:0; text-transform: uppercase;">Отсутствующие</h3>
-            <div id="absent-players-list" style="flex:1; overflow-y:auto; margin-bottom:15px;"></div>
+            <div id="absent-players-list" style="flex:1; overflow-y:auto; margin-bottom:20px;"></div>
             <button class="btn" style="width:100%; margin-bottom:10px;" id="save-absent-btn" onclick="saveAbsentStatuses()">ПОДТВЕРДИТЬ</button>
             <button class="btn btn-danger" style="width:100%;" onclick="document.getElementById('absent-modal').style.display='none'">ОТМЕНА</button>
         </div>
