@@ -1,5 +1,5 @@
 const SUPABASE_URL = 'https://rpqiapddvlkdecddczqx.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz';
+const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz'; 
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -8,15 +8,15 @@ let currentEditId = null, maxAttendanceStage = 3, isAdmin = false, currentPhotoF
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
 
 let allSeasons = [];
-let activeSeasonId = null;
+let activeSeasonId = null; 
 
 let myChart = null;
 const ADMIN_SECRET_CODE = 'ADMIN123';
-const STATUS_PRIORITY = { 'в обработке': 1, 'в клане': 2, 'кикнут': 3 };
+// Приоритет статусов: в клане -> в обработке -> кикнут
+const STATUS_PRIORITY = { 'в клане': 1, 'в обработке': 2, 'кикнут': 3 };
 
 const BACKUP_RETENTION = 30;
-const BACKUP_TABLES = ['players', 'attendance', 'match_stats', 'clan_matches',
-                       'fines', 'clan_calendar', 'player_notes', 'clan_settings', 'seasons'];
+const BACKUP_TABLES = ['players', 'attendance', 'match_stats', 'clan_matches', 'fines', 'clan_calendar', 'player_notes', 'clan_settings', 'seasons'];
 
 let SQUADS_CONFIG = [
     { name: '1 Штурмовой отряд', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] },
@@ -81,7 +81,6 @@ function importBackup(input) {
     reader.readAsText(file);
 }
 
-// Ручной бэкап (в БД)
 async function createAutoBackup(silent = false) {
     if (!silent) showToast('Создание бэкапа в БД...', 'info');
     const data = {};
@@ -101,7 +100,7 @@ async function createAutoBackup(silent = false) {
         if (!silent) showToast('Ошибка сохранения: ' + error.message, 'error');
         return false;
     }
-    // Чистка
+    // Чистка старых бэкапов
     const { data: all } = await supabaseClient.from('backups')
         .select('id').order('created_at', { ascending: false });
     if (all && all.length > BACKUP_RETENTION) {
@@ -122,7 +121,7 @@ async function fetchLatestBackup() {
 
 async function updateBackupStatus() {
     const el = document.getElementById('backup-status');
-    if (!el) return;
+    if (!el) return; // Элемент убран из HTML
     const latest = await fetchLatestBackup();
     if (!latest) {
         el.textContent = 'нет';
@@ -133,12 +132,9 @@ async function updateBackupStatus() {
     const ageMin = Math.round((Date.now() - last.getTime()) / 60000);
     const ageText = ageMin < 60 ? `${ageMin} мин` : `${Math.round(ageMin / 60)} ч`;
     el.textContent = `${last.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} (${ageText})`;
-    el.style.color = ageMin > 90 ? 'var(--danger-color)'
-                    : ageMin > 70 ? 'var(--accent-color)'
-                    : 'var(--success-color)';
+    el.style.color = ageMin > 90 ? 'var(--danger-color)' : ageMin > 70 ? 'var(--accent-color)' : 'var(--success-color)';
 }
 
-// Fallback: если последний бэкап старше 90 минут — делаем один
 async function checkAndBackupIfStale() {
     try {
         const latest = await fetchLatestBackup();
@@ -154,7 +150,6 @@ async function checkAndBackupIfStale() {
     } catch (e) { console.error('checkAndBackupIfStale:', e); }
 }
 
-// Восстановление из БД (кнопка "📂 Из БД")
 async function restoreFromDB() {
     if (!isAdmin) return showToast('Нужен вход админа', 'error');
     const { data: backups, error } = await supabaseClient.from('backups')
@@ -204,7 +199,7 @@ async function loadSeasons() {
 
     allSeasons = data;
     sel.innerHTML = '';
-
+    
     const optAll = document.createElement('option');
     optAll.value = 'all'; optAll.textContent = 'Все время';
     sel.appendChild(optAll);
@@ -215,7 +210,7 @@ async function loadSeasons() {
         if (s.is_active) { opt.selected = true; activeSeasonId = s.id; }
         sel.appendChild(opt);
     });
-
+    
     if (!activeSeasonId) {
         if (allSeasons.length > 0) {
             activeSeasonId = allSeasons[0].id;
@@ -265,7 +260,7 @@ async function loadSquadConfig() {
     }
 }
 
-document.addEventListener('dragover', function (e) {
+document.addEventListener('dragover', function(e) {
     const t = 100, s = 20;
     if (e.clientY < t) window.scrollBy(0, -s);
     else if (window.innerHeight - e.clientY < t) window.scrollBy(0, s);
@@ -310,7 +305,7 @@ function checkLogin() {
         document.getElementById('login-modal').style.display = 'none';
         document.getElementById('logout-btn').style.display = 'inline-block';
         loadAllData();
-        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex'); 
         showToast('Вход выполнен', 'info');
     } else {
         const player = allPlayers.find(p => p.nickname && p.nickname.toLowerCase() === input.toLowerCase());
@@ -330,7 +325,7 @@ function openTab(evt, tabName) {
     document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
     document.getElementById(tabName).classList.add("active"); evt.currentTarget.classList.add("active");
-
+    
     if (tabName === 'tab-roster') initDragAndDrop();
     if (tabName === 'tab-profile') renderPlayerList();
     if (tabName === 'tab-compare') initCompareTab();
@@ -369,7 +364,7 @@ function openSquadNamesModal() {
     const container = document.getElementById('squad-names-inputs');
     container.innerHTML = '';
     SQUADS_CONFIG.forEach((sq, i) => {
-        container.innerHTML += `<div class="form-group"><label>Отряд ${i + 1}</label><input type="text" id="squad-name-input-${i}" value="${sq.name}"></div>`;
+        container.innerHTML += `<div class="form-group"><label>Отряд ${i+1}</label><input type="text" id="squad-name-input-${i}" value="${sq.name}"></div>`;
     });
     document.getElementById('squad-names-modal').style.display = 'flex';
 }
@@ -416,19 +411,19 @@ async function clearAllSquads() {
 async function loadAllData() {
     await loadSquadConfig();
     populateProfileDropdowns();
-
+    
     let q = supabaseClient.from('players').select('*').order('kd', { ascending: false });
     q = filterBySeason(q);
     const { data: players, error } = await q;
-
+    
     if (error) console.error("Ошибка загрузки игроков:", error);
 
-    if (players) {
-        allPlayers = players;
-        activePlayers = players.filter(p => !p.status || p.status === 'в клане');
-        renderTops(); renderPlayerList(); fillPlayerSelects();
+    if (players) { 
+        allPlayers = players; 
+        activePlayers = players.filter(p => !p.status || p.status === 'в клане'); 
+        renderTops(); renderPlayerList(); fillPlayerSelects(); 
     }
-
+    
     let notesQ = supabaseClient.from('player_notes').select('*');
     const { data: notesData } = await notesQ;
     if (notesData) allNotes = notesData;
@@ -466,25 +461,25 @@ async function loadAllData() {
 }
 
 function renderTops() {
-    document.getElementById('loading-tops').style.display = 'none';
+    document.getElementById('loading-tops').style.display = 'none'; 
     document.getElementById('table-tops').style.display = 'block';
     const tbody = document.getElementById('players-table-body');
     let sortedPlayers = [...activePlayers].sort((a, b) => {
         let valA = a[currentSortColumn] || '', valB = b[currentSortColumn] || '';
         if (typeof valA === 'string' && typeof valB === 'string') return currentSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        return currentSortDirection === 'asc' ? (parseFloat(valA) || 0) - (parseFloat(valB) || 0) : (parseFloat(valB) || 0) - (parseFloat(valA) || 0);
+        return currentSortDirection === 'asc' ? (parseFloat(valA)||0) - (parseFloat(valB)||0) : (parseFloat(valB)||0) - (parseFloat(valA)||0);
     });
-
+    
     if (sortedPlayers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Нет данных за этот период</td></tr>';
         return;
     }
 
-    tbody.innerHTML = sortedPlayers.map((p, i) => `<tr><td>#${i + 1}</td><td><strong>${p.nickname}</strong></td><td>${p.kd}</td><td>${p.kda}</td><td style="color:var(--accent-color);font-weight:bold;">${p.points}</td></tr>`).join('');
+    tbody.innerHTML = sortedPlayers.map((p, i) => `<tr><td>#${i+1}</td><td><strong>${p.nickname}</strong></td><td>${p.kd}</td><td>${p.kda}</td><td style="color:var(--accent-color);font-weight:bold;">${p.points}</td></tr>`).join('');
 }
 
 function sortTops(column) {
-    if (currentSortColumn === column) currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    if (currentSortColumn === column) currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc'; 
     else { currentSortColumn = column; currentSortDirection = 'desc'; }
     renderTops();
 }
@@ -497,35 +492,71 @@ function fillPlayerSelects() {
 }
 
 function renderPlayerList(filterText = '') {
-    const container = document.getElementById('player-list-container'); if (!container) return;
+    const container = document.getElementById('player-list-container'); 
+    if (!container) return;
     container.innerHTML = '';
+    
     const searchLower = filterText.toLowerCase().trim();
     let filteredPlayers = allPlayers.filter(p => (p.nickname && p.nickname.toLowerCase().includes(searchLower)));
+    
+    // Сортируем: сначала в клане, потом в обработке, потом кикнутые
     filteredPlayers.sort((a, b) => {
-        const sA = a.status ? a.status.toLowerCase() : 'в клане', sB = b.status ? b.status.toLowerCase() : 'в клане';
-        return (STATUS_PRIORITY[sA] || 2) !== (STATUS_PRIORITY[sB] || 2) ? (STATUS_PRIORITY[sA] || 2) - (STATUS_PRIORITY[sB] || 2) : a.nickname.localeCompare(b.nickname);
+        const sA = a.status ? a.status.toLowerCase() : 'в клане'; 
+        const sB = b.status ? b.status.toLowerCase() : 'в клане';
+        const pA = STATUS_PRIORITY[sA] || 1;
+        const pB = STATUS_PRIORITY[sB] || 1;
+        
+        if (pA !== pB) return pA - pB;
+        return a.nickname.localeCompare(b.nickname); 
     });
+    
+    let currentStatusGroup = '';
 
     filteredPlayers.forEach(p => {
-        const div = document.createElement('div'); div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
-        let sColor = p.status === 'в обработке' ? 'var(--accent-color)' : (p.status === 'кикнут' ? 'var(--danger-color)' : 'var(--success-color)');
+        const pStatus = p.status ? p.status.toLowerCase() : 'в клане';
+        
+        // Если началась новая группа статусов, выводим заголовок
+        if (pStatus !== currentStatusGroup) {
+            currentStatusGroup = pStatus;
+            
+            const groupHeader = document.createElement('div');
+            groupHeader.style.cssText = 'margin: 15px 5px 8px 5px; color: var(--text-muted); font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px dashed var(--border-color); padding-bottom: 4px;';
+            
+            let headerText = '';
+            if (pStatus === 'в клане') headerText = '🟢 В КЛАНЕ';
+            else if (pStatus === 'в обработке') headerText = '🟡 В ОБРАБОТКЕ';
+            else if (pStatus === 'кикнут') headerText = '🔴 КИКНУТЫЕ';
+            else headerText = pStatus;
+            
+            groupHeader.textContent = headerText;
+            container.appendChild(groupHeader);
+        }
 
+        const div = document.createElement('div'); 
+        div.className = `player-item ${currentEditId === p.id ? 'active' : ''}`;
+        
+        let sColor = pStatus === 'в обработке' ? 'var(--accent-color)' : (pStatus === 'кикнут' ? 'var(--danger-color)' : 'var(--success-color)');
+        
         const coachCount = allNotes.filter(n => n.player_id === p.id && n.note_type === 'coach').length;
         const tkCount = allNotes.filter(n => n.player_id === p.id && n.note_type === 'timekeeper').length;
-
+        
         let badges = '';
         if (coachCount > 0) badges += `<span class="badge-coach">📝 ${coachCount}</span>`;
         if (tkCount > 0) badges += `<span class="badge-tk">📋 ${tkCount}</span>`;
 
+        // Для кикнутых делаем текст чуть бледнее
+        const nameOpacity = pStatus === 'кикнут' ? '0.6' : '1';
+
         div.innerHTML = `
-            <div style="display:flex; flex-direction:column;">
+            <div style="display:flex; flex-direction:column; opacity: ${nameOpacity};">
                 <div style="font-weight:bold; display:flex; align-items:center; flex-wrap:wrap;">
                     ${p.nickname} ${badges}
                 </div>
                 <span style="font-size:0.8em; color:${sColor}; margin-top:2px;">${p.status || 'в клане'}</span>
             </div>
         `;
-        div.onclick = () => selectPlayer(p); container.appendChild(div);
+        div.onclick = () => selectPlayer(p); 
+        container.appendChild(div);
     });
 }
 
@@ -559,7 +590,7 @@ async function selectPlayer(p) {
 async function renderPlayerAttendanceTable(playerId) {
     const container = document.getElementById('player-attendance-vertical');
     if (!container) return;
-
+    
     let q = supabaseClient.from('attendance').select('*').eq('player_id', playerId);
     q = filterBySeason(q);
     const { data: att } = await q;
@@ -586,10 +617,10 @@ async function renderPlayerAttendanceTable(playerId) {
 }
 
 function clearForm() {
-    const s = document.getElementById('player-search-input'); if (s) s.value = '';
+    const s = document.getElementById('player-search-input'); if (s) s.value = ''; 
     currentEditId = null; document.getElementById('form-title').innerText = "Новый боец";
     document.getElementById('edit-player-id').value = '';
-    ['nickname','discord-id','kd','kda','points','speed-combat','penetration-combat','speed-combined','penetration-combined'].forEach(f => document.getElementById('profile-' + f).value = '');
+    ['nickname','discord-id','kd','kda','points','speed-combat','penetration-combat','speed-combined','penetration-combined'].forEach(f => document.getElementById('profile-'+f).value = '');
     document.getElementById('profile-sledgehammer').checked = false;
     ['select-rifle','select-smg','select-sniper','select-pistol','select-machine-gun','select-shotgun','select-armor-combat','select-armor-combined','profile-status','profile-squad','profile-role'].forEach(id => {
         const el = document.getElementById(id);
@@ -627,19 +658,19 @@ async function saveProfile() {
         status: document.getElementById('profile-status').value, squad: selectedSquad || null, role: selectedRole || null,
         season_id: (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId
     };
-
+    
     let error;
     if (currentEditId) { const res = await supabaseClient.from('players').update(data).eq('id', currentEditId); error = res.error; }
     else { const res = await supabaseClient.from('players').insert([data]); error = res.error; }
-
-    if (error) showToast('Ошибка: ' + error.message, 'error');
+    
+    if (error) showToast('Ошибка: ' + error.message, 'error'); 
     else { showToast('Сохранено!', 'success'); await loadAllData(); clearForm(); }
 }
 
 async function deletePlayer() {
     if (!currentEditId || !confirm('Удалить?')) return;
     const { error } = await supabaseClient.from('players').delete().eq('id', currentEditId);
-    if (error) showToast('Ошибка', 'error');
+    if (error) showToast('Ошибка', 'error'); 
     else { showToast('Удален', 'success'); await loadAllData(); clearForm(); }
 }
 
@@ -671,7 +702,7 @@ function initDragAndDrop(filterText = '') {
         e.preventDefault(); if (!isAdmin) return; const id = e.dataTransfer.getData('text/plain');
         if (id) { await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id); await loadAllData(); initDragAndDrop(); }
     };
-
+    
     const searchLower = filterText.toLowerCase().trim();
     const free = activePlayers.filter(p => !p.squad && p.nickname.toLowerCase().includes(searchLower));
     free.forEach(p => {
@@ -684,7 +715,7 @@ function initDragAndDrop(filterText = '') {
 async function handleDrop(event, slot) {
     event.preventDefault(); slot.classList.remove('drag-over'); if (!isAdmin) return;
     const id = parseInt(event.dataTransfer.getData('text/plain')), sq = slot.dataset.squad, role = slot.dataset.role, ex = slot.dataset.playerId ? parseInt(slot.dataset.playerId) : null;
-    if (!id) return;
+    if (!id) return; 
     try {
         if (ex && ex !== id) await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', ex);
         await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id);
@@ -704,49 +735,49 @@ async function loadAttendance() {
     let qP = supabaseClient.from('players').select('*'), qA = supabaseClient.from('attendance').select('*');
     qP = filterBySeason(qP); qA = filterBySeason(qA);
     const { data: p } = await qP, { data: a } = await qA;
-
-    if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); }
+    
+    if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); } 
     if (a) allAttendance = a;
-
+    
     let max = 3; if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
     maxAttendanceStage = max;
-
-    const s = document.getElementById('modal-stage');
-    if (s) {
-        s.innerHTML = '';
-        for (let i = 1; i <= max; i++) {
-            const o = document.createElement('option'); o.value = i; o.textContent = `Этап ${i}`; s.appendChild(o);
-        }
+    
+    const s = document.getElementById('modal-stage'); 
+    if (s) { 
+        s.innerHTML = ''; 
+        for (let i = 1; i <= max; i++) { 
+            const o = document.createElement('option'); o.value = i; o.textContent = `Этап ${i}`; s.appendChild(o); 
+        } 
     }
-
+    
     const container = document.getElementById('attendance-container');
     container.innerHTML = '';
-
+    
     const numTourneys = Math.ceil(max / 3);
     for (let t = 1; t <= numTourneys; t++) {
         const details = document.createElement('details');
         details.className = 'tournament-group';
-        details.open = (t === numTourneys);
-
+        details.open = (t === numTourneys); 
+        
         const summary = document.createElement('summary');
         summary.textContent = `ТУРНИР ${t}`;
         details.appendChild(summary);
-
+        
         const content = document.createElement('div');
         content.className = 'tournament-content';
-
+        
         let tableHtml = `<table class="attendance-table"><thead><tr><th>Боец</th>`;
-        for (let st = 1; st <= 3; st++) tableHtml += `<th>ЭТАП ${(t - 1) * 3 + st}</th>`;
+        for (let st = 1; st <= 3; st++) tableHtml += `<th>ЭТАП ${(t-1)*3 + st}</th>`;
         tableHtml += `</tr></thead><tbody>`;
-
+        
         const searchQuery = document.getElementById('attendance-search').value.toLowerCase().trim();
         const filteredPlayers = activePlayers.filter(p => p.nickname.toLowerCase().includes(searchQuery));
-
+        
         filteredPlayers.forEach(p => {
             tableHtml += `<tr><td>${p.nickname}</td>`;
             for (let st = 1; st <= 3; st++) {
                 const globalStage = (t - 1) * 3 + st;
-                const r = allAttendance.find(a => a.player_id === p.id && a.tournament_number === globalStage);
+                const r = allAttendance.find(a => a.player_id === p.id && a.tournament_number === globalStage); 
                 const status = r ? r.status : 'Не отмечен';
                 let c = status === 'Пришел' ? 'status-1' : (status === 'Не пришел' ? 'status-2' : (status === 'Отгул' ? 'status-3' : ''));
                 tableHtml += `<td><select class="${c}" ${!isAdmin ? 'disabled' : ''} onchange="updateAttendance(${p.id}, ${globalStage}, this.value)"><option value="Не отмечен" ${status === 'Не отмечен' ? 'selected' : ''}>-</option><option value="Пришел" ${status === 'Пришел' ? 'selected' : ''}>Пришел</option><option value="Не пришел" ${status === 'Не пришел' ? 'selected' : ''}>Не пришел</option><option value="Отгул" ${status === 'Отгул' ? 'selected' : ''}>Отгул</option></select></td>`;
@@ -754,7 +785,7 @@ async function loadAttendance() {
             tableHtml += `</tr>`;
         });
         tableHtml += `</tbody></table>`;
-
+        
         content.innerHTML = tableHtml;
         details.appendChild(content);
         container.appendChild(details);
@@ -764,7 +795,7 @@ async function loadAttendance() {
 async function updateAttendance(id, t, s) {
     if (!isAdmin) return;
     const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
-
+    
     if (s === 'Не отмечен') {
         await supabaseClient.from('attendance').delete().eq('player_id', id).eq('tournament_number', t).eq('season_id', seasonId);
     } else {
@@ -793,7 +824,7 @@ async function deleteTournament() {
 async function loadAllMissed() {
     const tbody = document.getElementById('missed-table-body');
     if (!tbody) return;
-
+    
     let q = supabaseClient.from('attendance').select('*, players(nickname)').eq('status', 'Не пришел').order('tournament_number', { ascending: true });
     q = filterBySeason(q);
     const { data, error } = await q;
@@ -842,34 +873,34 @@ async function loadMatchStats() {
     qP = filterBySeason(qP); qS = filterBySeason(qS);
     const { data: p } = await qP, { data: s } = await qS;
     if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); }
-
+    
     let max = 3; if (s && s.length > 0) { const m = Math.max(...s.map(x => x.stage_number)); if (m > max) max = m; }
-
+    
     const container = document.getElementById('stats-container');
     container.innerHTML = '';
-
+    
     const numTourneys = Math.ceil(max / 3);
     for (let t = 1; t <= numTourneys; t++) {
         const details = document.createElement('details');
         details.className = 'tournament-group';
         details.open = (t === numTourneys);
-
+        
         const summary = document.createElement('summary');
         summary.textContent = `ТУРНИР ${t}`;
         details.appendChild(summary);
-
+        
         const content = document.createElement('div');
         content.className = 'tournament-content';
-
+        
         let tableHtml = `<table class="stats-table"><thead><tr><th rowspan="2" style="vertical-align:middle;">Боец</th>`;
-        for (let st = 1; st <= 3; st++) tableHtml += `<th colspan="4">ЭТАП ${(t - 1) * 3 + st}</th>`;
+        for (let st = 1; st <= 3; st++) tableHtml += `<th colspan="4">ЭТАП ${(t-1)*3 + st}</th>`;
         tableHtml += `</tr><tr>`;
         for (let st = 1; st <= 3; st++) tableHtml += `<th>K</th><th>D</th><th>A</th><th>PTS</th>`;
         tableHtml += `</tr></thead><tbody>`;
-
+        
         const searchQuery = document.getElementById('stats-search').value.toLowerCase().trim();
         const filteredPlayers = activePlayers.filter(p => p.nickname.toLowerCase().includes(searchQuery));
-
+        
         filteredPlayers.forEach(p => {
             tableHtml += `<tr><td>${p.nickname}</td>`;
             for (let st = 1; st <= 3; st++) {
@@ -884,7 +915,7 @@ async function loadMatchStats() {
             tableHtml += `</tr>`;
         });
         tableHtml += `</tbody></table>`;
-
+        
         content.innerHTML = tableHtml;
         details.appendChild(content);
         container.appendChild(details);
@@ -895,9 +926,9 @@ async function updateMatchStat(playerId, stageNum, field, value) {
     if (!isAdmin) return;
     const numVal = parseInt(value) || 0;
     const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
-
+    
     const { data: existing } = await supabaseClient.from('match_stats').select('*').eq('player_id', playerId).eq('stage_number', stageNum).eq('season_id', seasonId).single();
-
+    
     let payload = { player_id: playerId, stage_number: stageNum, season_id: seasonId };
     if (existing) payload = { ...existing, [field]: numVal };
     else {
@@ -913,13 +944,13 @@ async function recalculatePlayerStats(playerId) {
     let q = supabaseClient.from('match_stats').select('*').eq('player_id', playerId);
     q = filterBySeason(q);
     const { data: stats } = await q;
-
+    
     if (stats && stats.length > 0) {
         let tK = 0, tD = 0, tA = 0, tP = 0;
         stats.forEach(s => { tK += s.kills || 0; tD += s.deaths || 0; tA += s.assists || 0; tP += s.points || 0; });
         let kd = tD === 0 ? tK : (tK / tD), kda = tD === 0 ? (tK + tA) : ((tK + tA) / tD);
         kd = Math.round(kd * 100) / 100; kda = Math.round(kda * 100) / 100;
-
+        
         await supabaseClient.from('players').update({ kd: kd, kda: kda, points: tP }).eq('id', playerId);
         const p = allPlayers.find(x => x.id === playerId);
         if (p) { p.kd = kd; p.kda = kda; p.points = tP; }
@@ -978,9 +1009,9 @@ async function loadMatchHistory() {
     let q = supabaseClient.from('clan_matches').select('*').order('match_date', { ascending: true });
     q = filterBySeason(q);
     const { data: matches } = await q;
-
+    
     let wins = 0, losses = 0, draws = 0, totalRating = 1000, totalGears = 0;
-
+    
     if (!matches || matches.length === 0) {
         timeline.innerHTML = '<div style="text-align:center; width:100%;">Нет матчей</div>';
         renderHistoryChart(0, 0, 0); updateHistoryStats(1000, 'E', 0, 0, 0, 0);
@@ -989,20 +1020,33 @@ async function loadMatchHistory() {
 
     matches.forEach(match => {
         const cScore = match.clan_score || 0, eScore = match.enemy_points || 0;
+        const currentTier = getTierData(totalRating);
+
         if (cScore > eScore) {
-            totalRating += 50; totalGears += getTierData(totalRating).winGears; wins++;
+            // ПОБЕДА: максимум гильз
+            totalGears += currentTier.winGears;
+            totalRating += 50;
+            wins++;
         } else if (cScore < eScore) {
-            totalRating -= 50; if (cScore >= (eScore * 0.2)) totalGears += getTierData(totalRating).lossGears; losses++;
-        } else draws++;
+            // ПОРАЖЕНИЕ: минимум гильз, если набрали >= 20% от счета врага
+            if (cScore >= (eScore * 0.2)) {
+                totalGears += currentTier.lossGears;
+            }
+            totalRating -= 50;
+            losses++;
+        } else {
+            // НИЧЬЯ: 0 гильз
+            draws++;
+        }
     });
 
     const finalTier = getTierData(totalRating);
     updateHistoryStats(totalRating, finalTier.name, totalGears, wins, losses, draws);
 
     timeline.innerHTML = '';
-    const reversedMatches = [...matches].reverse();
+    const reversedMatches = [...matches].reverse(); 
     let currentCalcRating = 1000;
-
+    
     reversedMatches.forEach((match) => {
         const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
         const cScore = match.clan_score || 0, eScore = match.enemy_points || 0;
@@ -1010,9 +1054,23 @@ async function loadMatchHistory() {
         let scoreClass = '', winText = '', gearsEarned = 0;
         const tierAtMatch = getTierData(currentCalcRating);
 
-        if (cScore > eScore) { scoreClass = 'win'; winText = 'ПОБЕДА'; gearsEarned = tierAtMatch.winGears; currentCalcRating += 50; }
-        else if (cScore < eScore) { scoreClass = 'loss'; winText = 'ПОРАЖЕНИЕ'; if (cScore >= (eScore * 0.2)) gearsEarned = tierAtMatch.lossGears; currentCalcRating -= 50; }
-        else { winText = 'НИЧЬЯ'; }
+        if (cScore > eScore) { 
+            scoreClass = 'win'; 
+            winText = 'ПОБЕДА'; 
+            gearsEarned = tierAtMatch.winGears; // Максимум
+            currentCalcRating += 50; 
+        }
+        else if (cScore < eScore) { 
+            scoreClass = 'loss'; 
+            winText = 'ПОРАЖЕНИЕ'; 
+            if (cScore >= (eScore * 0.2)) {
+                gearsEarned = tierAtMatch.lossGears; // Минимум, если набрали 20%
+            }
+            currentCalcRating -= 50; 
+        }
+        else { 
+            winText = 'НИЧЬЯ'; 
+        }
 
         const adminEdit = isAdmin ? `
             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 5px;">
@@ -1053,9 +1111,9 @@ function updateHistoryStats(rating, tierName, gears, wins, losses, draws) {
     setTxt('hr-rating', rating); setTxt('hr-tier', tierName); setTxt('hr-gears', gears);
     const total = wins + losses + draws;
     setTxt('hr-wins', wins); setTxt('hr-losses', losses); setTxt('hr-draws', draws); setTxt('hr-total', total);
-    setTxt('hr-wins-pct', `(${total > 0 ? Math.round((wins / total) * 100) : 0}%)`);
-    setTxt('hr-losses-pct', `(${total > 0 ? Math.round((losses / total) * 100) : 0}%)`);
-    setTxt('hr-draws-pct', `(${total > 0 ? Math.round((draws / total) * 100) : 0}%)`);
+    setTxt('hr-wins-pct', `(${total > 0 ? Math.round((wins/total)*100) : 0}%)`);
+    setTxt('hr-losses-pct', `(${total > 0 ? Math.round((losses/total)*100) : 0}%)`);
+    setTxt('hr-draws-pct', `(${total > 0 ? Math.round((draws/total)*100) : 0}%)`);
 }
 
 async function addMatchHistory() {
@@ -1108,7 +1166,7 @@ async function loadCalendar() {
     list.innerHTML = '';
     Object.values(grouped).forEach(g => {
         const dateStr = g.date ? new Date(g.date).toLocaleDateString('ru-RU') : 'Дата не указана', timeStr = g.time ? g.time.slice(0, 5) : '';
-        const stagesStr = g.stages.length > 0 ? g.stages.sort((a, b) => a - b).join(', ') : '-', idsStr = g.ids.join(',');
+        const stagesStr = g.stages.length > 0 ? g.stages.sort((a,b)=>a-b).join(', ') : '-', idsStr = g.ids.join(',');
         list.innerHTML += `<div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; padding:15px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:4px;">
             <div><div style="color:var(--accent-color); font-weight:bold; font-size:1.1em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''}</div>
             <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${g.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
@@ -1141,9 +1199,9 @@ async function generateBulkCalendar() {
     const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
     while (current <= end) {
         if (selectedDays.includes(current.getDay())) {
-            const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+            const dateStr = `${current.getFullYear()}-${String(current.getMonth()+1).padStart(2,'0')}-${String(current.getDate()).padStart(2,'0')}`;
             for (let stageNum = 1; stageNum <= 3; stageNum++) events.push({ match_date: dateStr, match_time: time || null, tournament_number: currentTourney, stage_number: stageNum, notes, season_id: seasonId });
-            currentTourney++;
+            currentTourney++; 
         }
         current.setDate(current.getDate() + 1);
     }
@@ -1176,26 +1234,31 @@ async function toggleFineStatus(id, st) { await supabaseClient.from('fines').upd
 async function deleteFine(id) { if (confirm('Удалить?')) { await supabaseClient.from('fines').delete().eq('id', id); loadFines(); } }
 
 async function loadAnalytics() {
-    let q = supabaseClient.from('players').select('*');
-    q = filterBySeason(q);
+    let q = supabaseClient.from('players').select('*'); 
+    q = filterBySeason(q); 
     const { data: players } = await q;
-
-    if (!players) return;
+    
+    if (!players) return; 
     const active = players.filter(p => !p.status || p.status === 'в клане');
-
+    
+    // ТОП КД
     const topKD = [...active].sort((a, b) => b.kd - a.kd).slice(0, 10);
-    document.querySelector('#top-kd-table tbody').innerHTML = topKD.map((p, i) => `<tr><td>${i + 1}</td><td>${p.nickname}</td><td>${p.kd}</td></tr>`).join('');
-
+    document.querySelector('#top-kd-table tbody').innerHTML = topKD.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kd}</td></tr>`).join('');
+    
+    // ТОП КДА
     const topKDA = [...active].sort((a, b) => b.kda - a.kda).slice(0, 10);
-    document.querySelector('#top-kda-table tbody').innerHTML = topKDA.map((p, i) => `<tr><td>${i + 1}</td><td>${p.nickname}</td><td>${p.kda}</td></tr>`).join('');
-
+    document.querySelector('#top-kda-table tbody').innerHTML = topKDA.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.kda}</td></tr>`).join('');
+    
+    // ТОП ОЧКИ
     const topP = [...active].sort((a, b) => b.points - a.points).slice(0, 10);
-    document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i + 1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
-
+    document.querySelector('#top-points-table tbody').innerHTML = topP.map((p, i) => `<tr><td>${i+1}</td><td>${p.nickname}</td><td>${p.points}</td></tr>`).join('');
+    
+    // СВОДКА
     document.getElementById('stat-total-players').innerText = active.length;
     const inS = active.filter(p => p.squad && p.squad.trim() !== '').length;
     document.getElementById('stat-in-squads').innerText = inS; document.getElementById('stat-free').innerText = active.length - inS;
 
+    // СТАТИСТИКА ПО КАРТАМ
     let qMatches = supabaseClient.from('clan_matches').select('*');
     qMatches = filterBySeason(qMatches);
     const { data: matches } = await qMatches;
@@ -1218,6 +1281,7 @@ async function loadAnalytics() {
         mapStatsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных</td></tr>';
     }
 
+    // СРЕДНИЕ ПОКАЗАТЕЛИ
     if (active.length > 0) {
         const sumKd = active.reduce((acc, p) => acc + (p.kd || 0), 0);
         const sumKda = active.reduce((acc, p) => acc + (p.kda || 0), 0);
@@ -1230,7 +1294,7 @@ async function loadAnalytics() {
         let qStats = supabaseClient.from('match_stats').select('*');
         qStats = filterBySeason(qStats);
         const { data: allStats } = await qStats;
-
+        
         if (allStats && allStats.length > 0) {
             const activeIds = new Set(active.map(p => p.id));
             const activeStats = allStats.filter(s => activeIds.has(s.player_id));
@@ -1280,16 +1344,13 @@ async function deletePlayerNote(noteId, playerId) {
 async function sendAnalyticsScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 async function sendRosterScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 
-// ==================== INIT ====================
 async function init() {
     await loadSeasons();
     await loadAllData();
     setupRealtimeSync();
-
-    // Бэкапы
-    await checkAndBackupIfStale();   // fallback если cron не сработал
-    await updateBackupStatus();
-    setInterval(updateBackupStatus, 60000); // обновляем каждую минуту
+    
+    // Проверка бэкапа при входе (если >90 мин, сделает)
+    await checkAndBackupIfStale();
 }
 
 init();
