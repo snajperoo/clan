@@ -5,7 +5,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allNotes = [];
 let currentEditId = null, maxAttendanceStage = 3, isAdmin = false;
-let currentPhotoFiles = []; // Массив для хранения нескольких фото
+let currentPhotoFiles = []; 
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
 
 let allSeasons = [];
@@ -86,10 +86,7 @@ async function createAutoBackup(silent = false) {
     const data = {};
     for (const t of BACKUP_TABLES) {
         const { data: rows, error } = await supabaseClient.from(t).select('*');
-        if (error) {
-            console.error(`Backup error [${t}]:`, error);
-            return false;
-        }
+        if (error) return false;
         data[t] = rows || [];
     }
     const sizeBytes = new Blob([JSON.stringify(data)]).size;
@@ -668,7 +665,18 @@ async function loadAttendance() {
     if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); } 
     if (a) allAttendance = a;
     
-    let max = 3; if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
+    let max = 3; 
+    if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
+    
+    // Подтягиваем максимум из календаря
+    let qCal = supabaseClient.from('clan_calendar').select('tournament_number');
+    qCal = filterBySeason(qCal);
+    const { data: cal } = await qCal;
+    if (cal && cal.length > 0) {
+        const maxCal = Math.max(...cal.map(x => x.tournament_number || 1));
+        if (maxCal * 3 > max) max = maxCal * 3;
+    }
+
     maxAttendanceStage = max;
     
     const s = document.getElementById('modal-stage'); 
@@ -803,7 +811,18 @@ async function loadMatchStats() {
     const { data: p } = await qP, { data: s } = await qS;
     if (p) { allPlayers = p; activePlayers = p.filter(x => !x.status || x.status === 'в клане'); }
     
-    let max = 3; if (s && s.length > 0) { const m = Math.max(...s.map(x => x.stage_number)); if (m > max) max = m; }
+    let max = 3; 
+    if (s && s.length > 0) { const m = Math.max(...s.map(x => x.stage_number)); if (m > max) max = m; }
+    
+    // Подтягиваем максимум из календаря
+    let qCal = supabaseClient.from('clan_calendar').select('tournament_number');
+    qCal = filterBySeason(qCal);
+    const { data: cal } = await qCal;
+    if (cal && cal.length > 0) {
+        const maxCal = Math.max(...cal.map(x => x.tournament_number || 1));
+        if (maxCal * 3 > max) max = maxCal * 3;
+    }
+
     const container = document.getElementById('stats-container'); container.innerHTML = '';
     
     const numTourneys = Math.ceil(max / 3);
@@ -1059,9 +1078,17 @@ async function loadCalendar() {
     let maxStage = 0; if (matches && matches.length > 0) { maxStage = Math.max(...matches.map(m => m.stage_number || 0)); }
     const bulkInput = document.getElementById('bulk-start-tournament');
     if (bulkInput) bulkInput.value = (Math.ceil(maxStage / 3) || 0) + 1;
-    
-    const filteredEvents = (events || []).filter(e => activeSeasonId === 'all' || Number(e.season_id) === Number(activeSeasonId));
-    if (filteredEvents.length === 0) { list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет турниров</div>'; return; }
+
+    const showPast = document.getElementById('show-past-calendar')?.checked || false;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const filteredEvents = (events || []).filter(e => {
+        const seasonMatch = activeSeasonId === 'all' || Number(e.season_id) === Number(activeSeasonId);
+        const dateMatch = showPast || e.match_date >= todayStr;
+        return seasonMatch && dateMatch;
+    });
+
+    if (filteredEvents.length === 0) { list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет предстоящих турниров</div>'; return; }
     
     const grouped = {};
     filteredEvents.forEach(e => {
@@ -1072,11 +1099,15 @@ async function loadCalendar() {
     
     list.innerHTML = '';
     Object.values(grouped).forEach(g => {
+        const isPast = g.date < todayStr;
         const dateStr = g.date ? new Date(g.date).toLocaleDateString('ru-RU') : 'Дата не указана', timeStr = g.time ? g.time.slice(0, 5) : '';
         const stagesStr = g.stages.length > 0 ? g.stages.sort((a,b)=>a-b).join(', ') : '-', idsStr = g.ids.join(',');
+        const opacity = isPast ? '0.5' : '1';
+        const pastTag = isPast ? '<span style="color:var(--danger-color); font-size:0.8em; margin-left:10px;">(ПРОШЕЛ)</span>' : '';
+
         list.innerHTML += `
-        <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; padding:15px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:4px;">
-            <div><div style="color:var(--accent-color); font-weight:bold; font-size:1.1em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''}</div>
+        <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; padding:15px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:4px; opacity:${opacity};">
+            <div><div style="color:var(--accent-color); font-weight:bold; font-size:1.1em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''} ${pastTag}</div>
             <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${g.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
             <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${g.notes || ''}</div></div>
             ${isAdmin ? `<button class="btn btn-danger" style="padding: 6px 12px;" onclick="deleteCalendarEvents([${idsStr}])">X</button>` : ''}
@@ -1258,7 +1289,6 @@ function openPhotoModal(input) {
     const previewContainer = document.getElementById('photo-preview');
     const oldStageSelect = document.getElementById('modal-stage');
     
-    // Прячем старый одиночный селект этапа
     if (oldStageSelect && oldStageSelect.parentElement) {
         oldStageSelect.parentElement.style.display = 'none';
     }
@@ -1268,9 +1298,11 @@ function openPhotoModal(input) {
         previewContainer.style.display = 'flex';
         previewContainer.style.flexDirection = 'column';
         previewContainer.style.gap = '10px';
-        previewContainer.style.marginTop = '15px';
 
-        // Создаем превью для каждого файла
+        // Вычисляем максимальный турнир для выпадающего списка
+        let maxTourney = Math.ceil(maxAttendanceStage / 3);
+        if (maxTourney < 1) maxTourney = 1;
+
         currentPhotoFiles.forEach((file, index) => {
             const block = document.createElement('div');
             block.style.display = 'flex';
@@ -1280,8 +1312,8 @@ function openPhotoModal(input) {
             block.style.padding = '10px';
             block.style.borderRadius = 'var(--radius)';
             block.style.border = '1px solid var(--border-color)';
+            block.style.flexWrap = 'wrap';
 
-            // Миниатюра картинки
             const img = document.createElement('img');
             img.style.width = '50px';
             img.style.height = '50px';
@@ -1291,7 +1323,6 @@ function openPhotoModal(input) {
             reader.onload = (e) => { img.src = e.target.result; };
             reader.readAsDataURL(file);
 
-            // Название файла
             const fileName = document.createElement('span');
             fileName.textContent = file.name;
             fileName.style.fontSize = '0.8em';
@@ -1300,27 +1331,47 @@ function openPhotoModal(input) {
             fileName.style.overflow = 'hidden';
             fileName.style.textOverflow = 'ellipsis';
             fileName.style.whiteSpace = 'nowrap';
+            fileName.style.minWidth = '100px';
 
-            // Выбор этапа для конкретного фото
-            const select = document.createElement('select');
-            select.className = 'photo-stage-select';
-            select.dataset.index = index;
-            select.style.width = '100px';
-            select.style.padding = '4px';
-            
-            // Заполняем этапы (от 1 до maxAttendanceStage)
-            for (let i = 1; i <= Math.max(maxAttendanceStage, 3); i++) {
+            // Выбор ТУРНИРА
+            const tourneySelect = document.createElement('select');
+            tourneySelect.className = 'photo-tourney-select';
+            tourneySelect.dataset.index = index;
+            tourneySelect.style.padding = '4px';
+            tourneySelect.style.fontSize = '0.8em';
+            for (let i = 1; i <= Math.max(maxTourney, 5); i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `Турнир ${i}`;
+                if (i === maxTourney) opt.selected = true; // По умолчанию текущий турнир
+                tourneySelect.appendChild(opt);
+            }
+
+            // Выбор ЭТАПА
+            const stageSelect = document.createElement('select');
+            stageSelect.className = 'photo-stage-select';
+            stageSelect.dataset.index = index;
+            stageSelect.style.padding = '4px';
+            stageSelect.style.fontSize = '0.8em';
+            for (let i = 1; i <= 3; i++) {
                 const opt = document.createElement('option');
                 opt.value = i;
                 opt.textContent = `Этап ${i}`;
                 // Автовыбор по порядку (1-е фото -> Этап 1, 2-е -> Этап 2)
                 if (i === index + 1 && i <= 3) opt.selected = true; 
-                select.appendChild(opt);
+                stageSelect.appendChild(opt);
             }
 
             block.appendChild(img);
             block.appendChild(fileName);
-            block.appendChild(select);
+            
+            const controlsWrapper = document.createElement('div');
+            controlsWrapper.style.display = 'flex';
+            controlsWrapper.style.gap = '5px';
+            controlsWrapper.appendChild(tourneySelect);
+            controlsWrapper.appendChild(stageSelect);
+            
+            block.appendChild(controlsWrapper);
             previewContainer.appendChild(block);
         });
     }
@@ -1339,7 +1390,6 @@ function closePhotoModal() {
         previewContainer.style.display = 'none';
     }
     
-    // Возвращаем старый селект (на всякий случай)
     const oldStageSelect = document.getElementById('modal-stage');
     if (oldStageSelect && oldStageSelect.parentElement) {
         oldStageSelect.parentElement.style.display = 'block';
@@ -1349,14 +1399,15 @@ function closePhotoModal() {
 async function confirmPhotoUpload() {
     if (currentPhotoFiles.length === 0) return showToast('Файлы не выбраны', 'error');
     
-    const selects = document.querySelectorAll('.photo-stage-select');
+    const tourneySelects = document.querySelectorAll('.photo-tourney-select');
+    const stageSelects = document.querySelectorAll('.photo-stage-select');
     const uploads = [];
     
-    selects.forEach(select => {
-        const index = parseInt(select.dataset.index);
-        const stage = parseInt(select.value);
+    tourneySelects.forEach((select, index) => {
+        const tourney = parseInt(select.value);
+        const stage = parseInt(stageSelects[index].value);
         if (currentPhotoFiles[index]) {
-            uploads.push({ file: currentPhotoFiles[index], stage });
+            uploads.push({ file: currentPhotoFiles[index], tourney, stage });
         }
     });
 
@@ -1364,9 +1415,7 @@ async function confirmPhotoUpload() {
     closePhotoModal();
     
     setTimeout(() => {
-        // Здесь в будущем будет интеграция с OCR или API распознавания
         showToast(`Успешно распознано ${uploads.length} фото (демо-режим)`, 'success');
-        
         if (document.getElementById('tab-attendance').classList.contains('active')) {
             loadAttendance();
         }
