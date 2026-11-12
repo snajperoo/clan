@@ -4,7 +4,8 @@ const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allNotes = [];
-let currentEditId = null, maxAttendanceStage = 3, isAdmin = false, currentPhotoFile = null;
+let currentEditId = null, maxAttendanceStage = 3, isAdmin = false;
+let currentPhotoFiles = []; // Массив для хранения нескольких фото
 let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
 
 let allSeasons = [];
@@ -87,24 +88,19 @@ async function createAutoBackup(silent = false) {
         const { data: rows, error } = await supabaseClient.from(t).select('*');
         if (error) {
             console.error(`Backup error [${t}]:`, error);
-            if (!silent) showToast(`Ошибка бэкапа ${t}: ${error.message}`, 'error');
             return false;
         }
         data[t] = rows || [];
     }
     const sizeBytes = new Blob([JSON.stringify(data)]).size;
     const { error } = await supabaseClient.from('backups').insert([{ data, size_bytes: sizeBytes }]);
-    if (error) {
-        console.error('Backup insert error:', error);
-        // Ошибка может быть из-за отсутствия таблицы backups
-        return false;
-    }
+    if (error) return false;
+    
     const { data: all } = await supabaseClient.from('backups').select('id').order('created_at', { ascending: false });
     if (all && all.length > BACKUP_RETENTION) {
         const ids = all.slice(BACKUP_RETENTION).map(b => b.id);
         await supabaseClient.from('backups').delete().in('id', ids);
     }
-    if (!silent) showToast('✅ Бэкап сохранён', 'success');
     return true;
 }
 
@@ -1253,25 +1249,80 @@ async function deletePlayerNote(noteId, playerId) {
 async function sendAnalyticsScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 async function sendRosterScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 
-// ==================== ФОТО И ОТСУТСТВУЮЩИЕ ====================
+// ==================== МНОЖЕСТВЕННАЯ ЗАГРУЗКА ФОТО ====================
 
 function openPhotoModal(input) {
     if (!input.files || input.files.length === 0) return;
-    currentPhotoFile = input.files[0];
-
+    currentPhotoFiles = Array.from(input.files); 
+    
     const previewContainer = document.getElementById('photo-preview');
+    const oldStageSelect = document.getElementById('modal-stage');
+    
+    // Прячем старый одиночный селект этапа
+    if (oldStageSelect && oldStageSelect.parentElement) {
+        oldStageSelect.parentElement.style.display = 'none';
+    }
+
     if (previewContainer) {
         previewContainer.innerHTML = '';
-        const img = document.createElement('img');
-        img.style.maxHeight = '200px';
-        img.style.borderRadius = '4px';
-        
-        const reader = new FileReader();
-        reader.onload = (e) => { img.src = e.target.result; };
-        reader.readAsDataURL(currentPhotoFile);
-        
-        previewContainer.appendChild(img);
-        previewContainer.style.display = 'block';
+        previewContainer.style.display = 'flex';
+        previewContainer.style.flexDirection = 'column';
+        previewContainer.style.gap = '10px';
+        previewContainer.style.marginTop = '15px';
+
+        // Создаем превью для каждого файла
+        currentPhotoFiles.forEach((file, index) => {
+            const block = document.createElement('div');
+            block.style.display = 'flex';
+            block.style.alignItems = 'center';
+            block.style.gap = '10px';
+            block.style.background = 'var(--input-bg)';
+            block.style.padding = '10px';
+            block.style.borderRadius = 'var(--radius)';
+            block.style.border = '1px solid var(--border-color)';
+
+            // Миниатюра картинки
+            const img = document.createElement('img');
+            img.style.width = '50px';
+            img.style.height = '50px';
+            img.style.objectFit = 'cover';
+            img.style.borderRadius = '4px';
+            const reader = new FileReader();
+            reader.onload = (e) => { img.src = e.target.result; };
+            reader.readAsDataURL(file);
+
+            // Название файла
+            const fileName = document.createElement('span');
+            fileName.textContent = file.name;
+            fileName.style.fontSize = '0.8em';
+            fileName.style.color = 'var(--text-muted)';
+            fileName.style.flex = '1';
+            fileName.style.overflow = 'hidden';
+            fileName.style.textOverflow = 'ellipsis';
+            fileName.style.whiteSpace = 'nowrap';
+
+            // Выбор этапа для конкретного фото
+            const select = document.createElement('select');
+            select.className = 'photo-stage-select';
+            select.dataset.index = index;
+            select.style.width = '100px';
+            select.style.padding = '4px';
+            
+            // Заполняем этапы (от 1 до maxAttendanceStage)
+            for (let i = 1; i <= Math.max(maxAttendanceStage, 3); i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `Этап ${i}`;
+                // Автовыбор по порядку (1-е фото -> Этап 1, 2-е -> Этап 2)
+                if (i === index + 1 && i <= 3) opt.selected = true; 
+                select.appendChild(opt);
+            }
+
+            block.appendChild(img);
+            block.appendChild(fileName);
+            block.appendChild(select);
+            previewContainer.appendChild(block);
+        });
     }
 
     document.getElementById('photo-modal').style.display = 'flex';
@@ -1280,25 +1331,49 @@ function openPhotoModal(input) {
 function closePhotoModal() {
     document.getElementById('photo-modal').style.display = 'none';
     document.getElementById('attendance-photo').value = '';
-    currentPhotoFile = null;
+    currentPhotoFiles = [];
+    
+    const previewContainer = document.getElementById('photo-preview');
+    if (previewContainer) {
+        previewContainer.innerHTML = '';
+        previewContainer.style.display = 'none';
+    }
+    
+    // Возвращаем старый селект (на всякий случай)
+    const oldStageSelect = document.getElementById('modal-stage');
+    if (oldStageSelect && oldStageSelect.parentElement) {
+        oldStageSelect.parentElement.style.display = 'block';
+    }
 }
 
 async function confirmPhotoUpload() {
-    if (!currentPhotoFile) return showToast('Файл не выбран', 'error');
-    const stage = parseInt(document.getElementById('modal-stage').value);
+    if (currentPhotoFiles.length === 0) return showToast('Файлы не выбраны', 'error');
     
-    // Имитация распознавания (здесь должен быть OCR)
-    showToast('Идет распознавание фото...', 'info');
+    const selects = document.querySelectorAll('.photo-stage-select');
+    const uploads = [];
+    
+    selects.forEach(select => {
+        const index = parseInt(select.dataset.index);
+        const stage = parseInt(select.value);
+        if (currentPhotoFiles[index]) {
+            uploads.push({ file: currentPhotoFiles[index], stage });
+        }
+    });
+
+    showToast(`Отправка ${uploads.length} фото на распознавание...`, 'info');
     closePhotoModal();
     
     setTimeout(() => {
-        showToast('Фото обработано (демо-режим)', 'success');
-        // В реальности здесь будет запись в базу, найденных на фото игроков
+        // Здесь в будущем будет интеграция с OCR или API распознавания
+        showToast(`Успешно распознано ${uploads.length} фото (демо-режим)`, 'success');
+        
+        if (document.getElementById('tab-attendance').classList.contains('active')) {
+            loadAttendance();
+        }
     }, 1500);
 }
 
 function saveAbsentStatuses() {
-    // Заглушка для кнопки сохранения отсутствующих, если она вызывается
     document.getElementById('absent-modal').style.display = 'none';
     showToast('Сохранено', 'success');
 }
@@ -1308,8 +1383,6 @@ async function init() {
     await loadSeasons();
     await loadAllData();
     setupRealtimeSync();
-    
-    // Авто-бэкап при входе, если его не было >90 минут
     await checkAndBackupIfStale();
 }
 
