@@ -35,13 +35,14 @@ let SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
+// ⚡ ОБНОВЛЕНО: D начинается с 1250
 const TIER_SETTINGS = [
-    { name: 'E', minRating: 0, winGears: 1250, lossGears: 250 },
-    { name: 'D', minRating: 1050, winGears: 1750, lossGears: 500 },
-    { name: 'C', minRating: 1150, winGears: 2400, lossGears: 800 },
-    { name: 'B', minRating: 1300, winGears: 3300, lossGears: 1200 },
-    { name: 'A', minRating: 1450, winGears: 4700, lossGears: 1800 },
-    { name: 'S', minRating: 1600, winGears: 7000, lossGears: 3000 }
+    { name: 'E', minRating: 0, winGears: 1250, lossGears: 500 },
+    { name: 'D', minRating: 1250, winGears: 1750, lossGears: 500 },
+    { name: 'C', minRating: 1450, winGears: 2400, lossGears: 800 },
+    { name: 'B', minRating: 1650, winGears: 3300, lossGears: 1200 },
+    { name: 'A', minRating: 1850, winGears: 4700, lossGears: 1800 },
+    { name: 'S', minRating: 2050, winGears: 7000, lossGears: 3000 }
 ];
 
 function getTierData(rating) {
@@ -91,46 +92,6 @@ function findBestPlayerMatch(recognizedNick, playersList) {
         }
     }
     return bestPlayer;
-}
-
-function extractMatchScreenshotData(text) {
-    const clean = String(text || '').replace(/```json/gi, '').replace(/```/g, '').replace(/[\u00A0\u200B]/g, ' ').trim();
-    let parsed = null;
-    try {
-        parsed = JSON.parse(clean);
-    } catch (e) {
-        const objectMatch = clean.match(/\{[\s\S]*\}/);
-        const arrayMatch = clean.match(/\[[\s\S]*\]/);
-        try {
-            if (objectMatch) parsed = JSON.parse(objectMatch[0]);
-            else if (arrayMatch) parsed = JSON.parse(arrayMatch[0]);
-        } catch (parseError) {
-            console.warn('Не удалось разобрать JSON ответа ИИ:', parseError);
-        }
-    }
-    if (Array.isArray(parsed)) return { enemy_name: null, clan_score: null, enemy_points: null, players: parsed };
-    if (!parsed || typeof parsed !== 'object') return { enemy_name: null, clan_score: null, enemy_points: null, players: [] };
-
-    const toScore = (value) => {
-        if (value === null || value === undefined || value === '') return null;
-        const number = Number(value);
-        return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
-    };
-    const toName = (value) => {
-        if (typeof value !== 'string') return null;
-        const name = value.trim();
-        if (!name || /^(null|неизвестно|неизвестный враг|нет данных|н\/д|-)$/i.test(name)) return null;
-        return name;
-    };
-
-    const players = Array.isArray(parsed.players) ? parsed.players : (Array.isArray(parsed.player_stats) ? parsed.player_stats : (Array.isArray(parsed.data) ? parsed.data : []));
-
-    return {
-        enemy_name: toName(parsed.enemy_name ?? parsed.opponent_clan ?? parsed.enemy_clan ?? parsed.opponent),
-        clan_score: toScore(parsed.clan_score ?? parsed.our_score ?? parsed.stalzone_score),
-        enemy_points: toScore(parsed.enemy_points ?? parsed.opponent_score ?? parsed.enemy_score),
-        players
-    };
 }
 
 // ==================== БЭКАПЫ ====================
@@ -688,13 +649,11 @@ async function loadMyProfile(player) {
     if (!player) return; 
     document.getElementById('my-profile-content').style.display = 'block';
     
-    // Основные статы
     document.getElementById('my-kd').innerText = player.kd || 0; 
     document.getElementById('my-kda').innerText = player.kda || 0;
     document.getElementById('my-points').innerText = player.points || 0;
     document.getElementById('my-squad').innerText = player.squad ? `${player.squad} (${player.role})` : 'Не в отряде';
     
-    // Статус
     const statusEl = document.getElementById('my-status');
     statusEl.innerText = player.status || 'в клане';
     statusEl.style.color = player.status === 'кикнут' ? 'var(--danger-color)' : (player.status === 'в обработке' ? 'var(--accent-color)' : 'var(--success-color)');
