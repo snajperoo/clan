@@ -17,6 +17,8 @@ let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'k
 
 let allSeasons = [];
 let activeSeasonId = null; 
+let calendarAutoArchiveTimer = null;
+let isProcessingCalendarEvents = false;
 
 let myChart = null;
 const ADMIN_SECRET_CODE = 'ADMIN123';
@@ -321,6 +323,7 @@ function checkLogin() {
         document.getElementById('login-modal').style.display = 'none';
         document.getElementById('logout-btn').style.display = 'inline-block';
         loadAllData();
+        startCalendarAutoArchive();
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex'); 
         showToast('Вход выполнен', 'info');
     } else {
@@ -1141,81 +1144,267 @@ function renderHistoryChart(wins, losses, draws = 0) {
     });
 }
 
-async function loadCalendar() {
-    const list = document.getElementById('calendar-list'); if (!list) return; list.innerHTML = 'Загрузка...';
-    const { data: events, error } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('tournament_number', { ascending: true });
-    if (error) { list.innerHTML = `<div style="color:red;">Ошибка БД: ${error.message}</div>`; return; }
-    
-    const { data: matches } = await supabaseClient.from('clan_matches').select('stage_number');
-    let maxStage = 0; if (matches && matches.length > 0) { maxStage = Math.max(...matches.map(m => m.stage_number || 0)); }
+function getCalendarGroupKey(event) {
+    const time = event.match_time ? String(event.match_time).slice(0, 5) : '';
+    return `${Number(event.season_id) || 1}_${event.match_date}_${Number(event.tournament_number) || 1}_${time}`;
+}
+
+function getCalendarDateTime(event) {
+    if (!event.match_date || !event.match_time) return null;
+    const time = String(event.match_time).slice(0, 8);
+    const parsed = new Date(`${event.match_date}T${time}`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Переносит все этапы одного события календаря в историю.
+// Повторный запуск безопасен: уже существующие этапы повторно не добавляются.
+async function transferCalendarEventsToHistory(calendarEvents) {
+    if (!calendarEvents || calendarEvents.length === 0) {
+        return { ok: false, error: 'Событие календаря не найдено' };
+    }
+
+    const first = calendarEvents[0];
+    const tournamentNumber = Math.max(1, parseInt(first.tournament_number, 10) || 1);
+    const seasonId = parseInt(first.season_id, 10) || 1;
+    let localStages = [...new Set(calendarEvents
+        .map(event => parseInt(event.stage_number, 10))
+        .filter(stage => Number.isInteger(stage) && stage >= 1 && stage <= 3))]
+        .sort((a, b) => a - b);
+
+    // Если в календаре у события не указан конкретный этап, создаём стандартные 3 этапа.
+    if (localStages.length === 0) localStages = [1, 2, 3];
+
+    const historyRows = localStages.map(localStage => ({
+        match_date: first.match_date || getLocalDateString(),
+        clan_score: 0,
+        enemy_points: 0,
+        enemy_name: 'Неизвестный враг',
+        map_name: 'Низина',
+        stage_number: (tournamentNumber - 1) * 3 + localStage,
+        season_id: seasonId
+    }));
+
+    const stageNumbers = historyRows.map(row => row.stage_number);
+    const { data: existingMatches, error: readError } = await supabaseClient
+        .from('clan_matches')
+        .select('stage_number')
+        .eq('season_id', seasonId)
+        .in('stage_number', stageNumbers);
+
+    if (readError) return { ok: false, error: readError.message };
+
+    const existingStages = new Set((existingMatches || []).map(row => Number(row.stage_number)));
+    const missingRows = historyRows.filter(row => !existingStages.has(row.stage_number));
+
+    if (missingRows.length > 0) {
+        const { error: insertError } = await supabaseClient.from('clan_matches').insert(missingRows);
+        if (insertError) return { ok: false, error: insertError.message };
+    }
+
+    const calendarIds = calendarEvents.map(event => event.id).filter(id => id !== null && id !== undefined);
+    if (calendarIds.length > 0) {
+        const { error: deleteError } = await supabaseClient
+            .from('clan_calendar')
+            .delete()
+            .in('id', calendarIds);
+        if (deleteError) return { ok: false, error: deleteError.message };
+    }
+
+    return { ok: true, created: missingRows.length, stages: historyRows.length, deleted: calendarIds.length };
+}
+
+// Автоматически переносит наступившие события. Работает для всех сезонов,
+// чтобы смена выбранного сезона не оставляла старые события в календаре.
+async function processDueCalendarEvents() {
+    if (!isAdmin || isProcessingCalendarEvents) return 0;
+    isProcessingCalendarEvents = true;
+
+    try {
+        const { data: events, error } = await supabaseClient.from('clan_calendar').select('*');
+        if (error) {
+            console.error('Ошибка проверки календаря:', error.message);
+            return 0;
+        }
+
+        const now = new Date();
+        const groups = new Map();
+
+        (events || []).forEach(event => {
+            const eventDateTime = getCalendarDateTime(event);
+            // Для автоматического переноса обязательно задано точное время.
+            if (!eventDateTime || eventDateTime > now) return;
+
+            const key = getCalendarGroupKey(event);
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(event);
+        });
+
+        let transferred = 0;
+        for (const group of groups.values()) {
+            const result = await transferCalendarEventsToHistory(group);
+            if (result.ok) {
+                transferred++;
+            } else {
+                console.error('Не удалось перенести событие календаря:', result.error);
+            }
+        }
+
+        if (transferred > 0) {
+            showToast(`В историю автоматически перенесено событий: ${transferred}`, 'success');
+        }
+        return transferred;
+    } catch (error) {
+        console.error('processDueCalendarEvents:', error);
+        return 0;
+    } finally {
+        isProcessingCalendarEvents = false;
+    }
+}
+
+function startCalendarAutoArchive() {
+    if (!isAdmin || calendarAutoArchiveTimer) return;
+
+    const runCheck = async () => {
+        const transferred = await processDueCalendarEvents();
+        if (transferred <= 0) return;
+
+        const activeTab = document.querySelector('.tab-content.active');
+        if (activeTab?.id === 'tab-calendar') await loadCalendar(true);
+        if (activeTab?.id === 'tab-history') await loadMatchHistory();
+        if (activeTab?.id === 'tab-stats') await loadMatchStats();
+        if (activeTab?.id === 'tab-attendance') await loadAttendance();
+    };
+
+    // Проверяем сразу, затем раз в минуту и при возвращении на вкладку браузера.
+    runCheck();
+    calendarAutoArchiveTimer = setInterval(runCheck, 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) runCheck();
+    });
+    window.addEventListener('focus', runCheck);
+}
+
+async function loadCalendar(skipAutoArchive = false) {
+    const list = document.getElementById('calendar-list');
+    if (!list) return;
+    list.innerHTML = 'Загрузка...';
+
+    if (isAdmin && !skipAutoArchive) await processDueCalendarEvents();
+
+    const { data: events, error } = await supabaseClient
+        .from('clan_calendar')
+        .select('*')
+        .order('match_date', { ascending: true })
+        .order('tournament_number', { ascending: true });
+    if (error) {
+        list.innerHTML = `<div style="color:red;">Ошибка БД: ${error.message}</div>`;
+        return;
+    }
+
+    let qMatches = supabaseClient.from('clan_matches').select('stage_number');
+    qMatches = filterBySeason(qMatches);
+    const { data: matches } = await qMatches;
+    let maxStage = 0;
+    if (matches && matches.length > 0) {
+        maxStage = Math.max(...matches.map(match => Number(match.stage_number) || 0));
+    }
     const bulkInput = document.getElementById('bulk-start-tournament');
     if (bulkInput) bulkInput.value = (Math.ceil(maxStage / 3) || 0) + 1;
 
     const showPast = document.getElementById('show-past-calendar')?.checked || false;
     const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const todayStr = getLocalDateString(now);
 
-    const filteredEvents = (events || []).filter(e => {
-        const seasonMatch = activeSeasonId === 'all' || Number(e.season_id) === Number(activeSeasonId);
+    const filteredEvents = (events || []).filter(event => {
+        const seasonMatch = activeSeasonId === 'all' || Number(event.season_id) === Number(activeSeasonId);
         if (!seasonMatch) return false;
         if (showPast) return true;
-        if (e.match_date < todayStr) return false;
-        if (e.match_date === todayStr && e.match_time) {
-            const eventDateTime = new Date(`${e.match_date}T${e.match_time}`);
-            const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-            if (eventDateTime < threeHoursAgo) return false;
-        }
+        if (event.match_date < todayStr) return false;
+        const eventDateTime = getCalendarDateTime(event);
+        if (eventDateTime && eventDateTime <= now) return false;
         return true;
     });
 
-    if (filteredEvents.length === 0) { 
-        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет предстоящих турниров</div>'; 
-        return; 
+    if (filteredEvents.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет предстоящих турниров</div>';
+        return;
     }
-    
+
     const grouped = {};
-    filteredEvents.forEach(e => {
-        const key = `${e.match_date}_${e.tournament_number}_${e.match_time}`;
-        if (!grouped[key]) grouped[key] = { date: e.match_date, time: e.match_time, tourney: e.tournament_number, notes: e.notes, stages: [], ids: [] };
-        if (e.stage_number) grouped[key].stages.push(e.stage_number); grouped[key].ids.push(e.id);
+    filteredEvents.forEach(event => {
+        const key = getCalendarGroupKey(event);
+        if (!grouped[key]) {
+            grouped[key] = {
+                date: event.match_date,
+                time: event.match_time,
+                tourney: event.tournament_number,
+                seasonId: event.season_id,
+                notes: event.notes,
+                stages: [],
+                ids: []
+            };
+        }
+        if (event.stage_number) grouped[key].stages.push(Number(event.stage_number));
+        grouped[key].ids.push(event.id);
     });
-    
+
     list.innerHTML = '';
-    Object.values(grouped).forEach(g => {
-        const isPast = g.date < todayStr;
-        const dateStr = g.date ? new Date(g.date).toLocaleDateString('ru-RU') : 'Дата не указана', timeStr = g.time ? g.time.slice(0, 5) : '';
-        const stagesStr = g.stages.length > 0 ? g.stages.sort((a,b)=>a-b).join(', ') : '-', idsStr = g.ids.join(',');
+    Object.values(grouped).forEach(group => {
+        const isPast = group.date < todayStr;
+        const dateStr = group.date ? new Date(`${group.date}T00:00:00`).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const timeStr = group.time ? String(group.time).slice(0, 5) : '';
+        const stagesStr = group.stages.length > 0
+            ? [...new Set(group.stages)].sort((a, b) => a - b).join(', ')
+            : '-';
+        const idsStr = group.ids.join(',');
         const opacity = isPast ? '0.5' : '1';
-        const pastTag = isPast ? '<span style="color:var(--danger-color); font-size:0.8em; margin-left:10px;">(ПРОШЕЛ)</span>' : '';
+        const pastTag = isPast
+            ? '<span style="color:var(--danger-color); font-size:0.8em; margin-left:10px;">(ПРОШЕЛ)</span>'
+            : '';
 
         list.innerHTML += `
         <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; padding:15px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:4px; opacity:${opacity};">
             <div>
                 <div style="color:var(--accent-color); font-weight:bold; font-size:1.1em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''} ${pastTag}</div>
-                <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${g.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
-                <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${g.notes || ''}</div>
+                <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${group.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
+                <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${group.notes || ''}</div>
             </div>
             ${isAdmin ? `
             <div style="display:flex; gap:10px; align-items:center;">
-                <button class="btn" style="background:var(--accent-color); color:#000;" onclick="moveCalendarToHistory(${g.ids[0]}, '${g.date}', ${g.tourney}, ${g.stages[0] || 1})">Провести матч</button>
+                <button class="btn" style="background:var(--accent-color); color:#000;" onclick="moveCalendarToHistory([${idsStr}])">Провести матч</button>
                 <button class="btn btn-danger" style="padding: 6px 12px;" onclick="deleteCalendarEvents([${idsStr}])">X</button>
             </div>` : ''}
         </div>`;
     });
 }
 
-async function moveCalendarToHistory(calId, date, tourney, stage) {
-    if (!isAdmin || !confirm('Перенести в Историю матчей? (Турнир исчезнет из календаря)')) return;
-    const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
+async function moveCalendarToHistory(calendarIds) {
+    if (!isAdmin) return showToast('Нужен вход администратора', 'error');
+    if (!confirm('Перенести все этапы этого события в Историю матчей?')) return;
 
-    const { error: insErr } = await supabaseClient.from('clan_matches').insert([{
-        match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Неизвестный враг', map_name: 'Низина', stage_number: tourney || 1, season_id: seasonId
-    }]);
+    const ids = Array.isArray(calendarIds) ? calendarIds : [calendarIds];
+    const { data: events, error } = await supabaseClient
+        .from('clan_calendar')
+        .select('*')
+        .in('id', ids);
 
-    if (insErr) return showToast('Ошибка: ' + insErr.message, 'error');
-    await supabaseClient.from('clan_calendar').delete().eq('id', calId);
-    showToast('Турнир перенесен в Историю!', 'success');
-    loadCalendar(); loadMatchHistory();
+    if (error) return showToast('Ошибка чтения календаря: ' + error.message, 'error');
+    if (!events || events.length === 0) return showToast('Событие уже перенесено или удалено', 'info');
+
+    const result = await transferCalendarEventsToHistory(events);
+    if (!result.ok) return showToast('Ошибка переноса: ' + result.error, 'error');
+
+    showToast(`Событие перенесено. Этапов в истории: ${result.stages || 0}`, 'success');
+    await loadCalendar(true);
+    await loadMatchHistory();
+    if (document.getElementById('tab-stats')?.classList.contains('active')) await loadMatchStats();
 }
 
 async function addUpcomingMatch() {
@@ -1520,6 +1709,44 @@ function closePhotoModal() {
     }
 }
 
+async function ensureHistoryEntryForStage(globalStage, seasonId) {
+    const { data: existing, error: findError } = await supabaseClient
+        .from('clan_matches')
+        .select('id')
+        .eq('season_id', seasonId)
+        .eq('stage_number', globalStage)
+        .limit(1)
+        .maybeSingle();
+
+    if (findError) return { created: false, error: findError.message };
+    if (existing) return { created: false };
+
+    const tournamentNumber = Math.ceil(globalStage / 3);
+    const localStage = ((globalStage - 1) % 3) + 1;
+    const { data: calendarEvent } = await supabaseClient
+        .from('clan_calendar')
+        .select('match_date')
+        .eq('season_id', seasonId)
+        .eq('tournament_number', tournamentNumber)
+        .eq('stage_number', localStage)
+        .order('match_date', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+    const { error: insertError } = await supabaseClient.from('clan_matches').insert([{
+        match_date: calendarEvent?.match_date || getLocalDateString(),
+        clan_score: 0,
+        enemy_points: 0,
+        enemy_name: 'Неизвестный враг',
+        map_name: 'Низина',
+        stage_number: globalStage,
+        season_id: seasonId
+    }]);
+
+    if (insertError) return { created: false, error: insertError.message };
+    return { created: true };
+}
+
 async function confirmPhotoUpload() {
     if (currentPhotoFiles.length === 0) return showToast('Файлы не выбраны', 'error');
     if (!GEMINI_API_KEY || GEMINI_API_KEY.trim() === '') return showToast('Ошибка: Не указан ключ Gemini в appv6.js', 'error');
@@ -1543,6 +1770,7 @@ async function confirmPhotoUpload() {
 
     let totalRecognized = 0;
     let totalSaved = 0;
+    let totalHistoryCreated = 0;
 
     for (const upload of uploads) {
         try {
@@ -1606,6 +1834,7 @@ async function confirmPhotoUpload() {
 
             totalRecognized += parsedData.length;
             const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
+            let uploadMatchedAnyPlayer = false;
             
             for (const obj of parsedData) {
                 // На всякий случай проверяем, что ИИ вернул объект с ником, а не просто строку
@@ -1615,6 +1844,7 @@ async function confirmPhotoUpload() {
                 const matchedPlayer = findBestPlayerMatch(rawNick, activePlayers);
                 
                 if (matchedPlayer) {
+                    uploadMatchedAnyPlayer = true;
                     // 1. Всегда ставим посещаемость "Пришел"
                     await supabaseClient.from('attendance').upsert({
                         player_id: matchedPlayer.id,
@@ -1641,6 +1871,13 @@ async function confirmPhotoUpload() {
                     totalSaved++;
                 }
             }
+
+            // История хранит одну карточку на каждый этап, а не одну карточку на каждого игрока.
+            if (uploadMatchedAnyPlayer) {
+                const historyResult = await ensureHistoryEntryForStage(upload.globalStage, seasonId);
+                if (historyResult.created) totalHistoryCreated++;
+                if (historyResult.error) console.error('Не удалось создать этап в истории:', historyResult.error);
+            }
         } catch (err) {
             console.error("Ошибка распознавания:", err);
             showToast('Ошибка ИИ: ' + err.message, 'error');
@@ -1648,16 +1885,19 @@ async function confirmPhotoUpload() {
     }
 
     if (totalRecognized > 0) {
-        showToast(`ИИ прочитал ${totalRecognized} игроков. Засчитано ${totalSaved}!`, 'success');
+        showToast(`ИИ прочитал ${totalRecognized} игроков. Засчитано ${totalSaved}. Новых этапов в истории: ${totalHistoryCreated}.`, 'success');
     } else {
         showToast(`ИИ не смог распознать данные.`, 'error');
     }
     
-    if (document.getElementById('tab-attendance').classList.contains('active')) {
-        loadAttendance();
+    if (document.getElementById('tab-attendance')?.classList.contains('active')) {
+        await loadAttendance();
     }
-    if (document.getElementById('tab-stats').classList.contains('active')) {
-        loadMatchStats();
+    if (document.getElementById('tab-stats')?.classList.contains('active')) {
+        await loadMatchStats();
+    }
+    if (document.getElementById('tab-history')?.classList.contains('active')) {
+        await loadMatchHistory();
     }
 }
 
