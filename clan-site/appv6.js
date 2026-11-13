@@ -1509,7 +1509,7 @@ async function confirmPhotoUpload() {
             
             // Функция для отправки запроса с повторными попытками и сменой модели
             const fetchWithRetry = async (retries = 4, delay = 2000) => {
-                const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite']; // Список моделей для fallback
+                const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite']; // Актуальные ID моделей Gemini 3
                 
                 for (let i = 0; i < retries; i++) {
                     const currentModel = models[i % models.length]; // Чередуем модели
