@@ -13,12 +13,11 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 let allPlayers = [], activePlayers = [], allFines = [], allAttendance = [], allNotes = [];
 let currentEditId = null, maxAttendanceStage = 3, isAdmin = false;
 let currentPhotoFiles = []; 
-let pendingAbsentPlayers = [], currentAbsentStage = null, currentSortColumn = 'kd', currentSortDirection = 'desc';
+let pendingAbsentPlayers = [], pendingMatchedPlayers = [], currentAbsentStage = null, pendingSeasonId = null;
+let currentSortColumn = 'kd', currentSortDirection = 'desc';
 
 let allSeasons = [];
 let activeSeasonId = null; 
-let calendarAutoArchiveTimer = null;
-let isProcessingCalendarEvents = false;
 
 let myChart = null;
 const ADMIN_SECRET_CODE = 'ADMIN123';
@@ -94,38 +93,8 @@ function findBestPlayerMatch(recognizedNick, playersList) {
     return bestPlayer;
 }
 
-// Железобетонный парсер ответов ИИ
-function extractPlayerData(text) {
-    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-    clean = clean.replace(/[\u00A0\u200B]/g, ' '); 
-    
-    try {
-        const parsed = JSON.parse(clean);
-        if (Array.isArray(parsed)) return parsed;
-    } catch(e) {
-        let jsonCompatible = clean.replace(/'/g, '"');
-        try {
-            const parsed = JSON.parse(jsonCompatible);
-            if (Array.isArray(parsed)) return parsed;
-        } catch(e2) {
-            const matches = clean.match(/\[[\s\S]*\]/);
-            if (matches) {
-                try { return JSON.parse(matches[0].replace(/'/g, '"')); } catch(e3) {}
-            }
-        }
-    }
-    return [];
-}
-
-// Разбирает ответ ИИ для одного скриншота. Поддерживает и старый формат-массив,
-// чтобы фотографии по-прежнему заполняли посещаемость и индивидуальную статистику.
 function extractMatchScreenshotData(text) {
-    const clean = String(text || '')
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .replace(/[\u00A0\u200B]/g, ' ')
-        .trim();
-
+    const clean = String(text || '').replace(/```json/gi, '').replace(/```/g, '').replace(/[\u00A0\u200B]/g, ' ').trim();
     let parsed = null;
     try {
         parsed = JSON.parse(clean);
@@ -139,14 +108,8 @@ function extractMatchScreenshotData(text) {
             console.warn('Не удалось разобрать JSON ответа ИИ:', parseError);
         }
     }
-
-    // Совместимость с предыдущим ответом Gemini: [{ nickname, k, d, a, pts }].
-    if (Array.isArray(parsed)) {
-        return { enemy_name: null, clan_score: null, enemy_points: null, players: parsed };
-    }
-    if (!parsed || typeof parsed !== 'object') {
-        return { enemy_name: null, clan_score: null, enemy_points: null, players: [] };
-    }
+    if (Array.isArray(parsed)) return { enemy_name: null, clan_score: null, enemy_points: null, players: parsed };
+    if (!parsed || typeof parsed !== 'object') return { enemy_name: null, clan_score: null, enemy_points: null, players: [] };
 
     const toScore = (value) => {
         if (value === null || value === undefined || value === '') return null;
@@ -160,9 +123,7 @@ function extractMatchScreenshotData(text) {
         return name;
     };
 
-    const players = Array.isArray(parsed.players) ? parsed.players
-        : (Array.isArray(parsed.player_stats) ? parsed.player_stats
-        : (Array.isArray(parsed.data) ? parsed.data : []));
+    const players = Array.isArray(parsed.players) ? parsed.players : (Array.isArray(parsed.player_stats) ? parsed.player_stats : (Array.isArray(parsed.data) ? parsed.data : []));
 
     return {
         enemy_name: toName(parsed.enemy_name ?? parsed.opponent_clan ?? parsed.enemy_clan ?? parsed.opponent),
@@ -171,7 +132,6 @@ function extractMatchScreenshotData(text) {
         players
     };
 }
-// =======================================================================
 
 // ==================== БЭКАПЫ ====================
 
@@ -201,9 +161,7 @@ function importBackup(input) {
             if (!confirm('Вы уверены? Текущие данные будут перезаписаны.')) return;
             showToast('Восстановление...', 'info');
             for (const [table, rows] of Object.entries(data)) {
-                if (rows && rows.length > 0) {
-                    await supabaseClient.from(table).upsert(rows);
-                }
+                if (rows && rows.length > 0) await supabaseClient.from(table).upsert(rows);
             }
             showToast('Данные восстановлены!', 'success');
             location.reload();
@@ -333,12 +291,6 @@ async function loadSquadConfig() {
     }
 }
 
-document.addEventListener('dragover', function(e) {
-    const t = 100, s = 20;
-    if (e.clientY < t) window.scrollBy(0, -s);
-    else if (window.innerHeight - e.clientY < t) window.scrollBy(0, s);
-});
-
 function setupRealtimeSync() {
     supabaseClient.channel('schema-db-changes').on('postgres_changes', { event: '*', schema: 'public' }, payload => {
         loadAllData().then(() => {
@@ -378,8 +330,6 @@ function checkLogin() {
         document.getElementById('login-modal').style.display = 'none';
         document.getElementById('logout-btn').style.display = 'inline-block';
         loadAllData();
-        startCalendarAutoArchive();
-        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex'); 
         showToast('Вход выполнен', 'info');
     } else {
         const player = allPlayers.find(p => p.nickname && p.nickname.toLowerCase() === input.toLowerCase());
@@ -732,12 +682,64 @@ async function deletePlayer() {
     else { showToast('Удален', 'success'); await loadAllData(); clearForm(); }
 }
 
+// ==================== ЛИЧНЫЙ КАБИНЕТ ====================
+
 async function loadMyProfile(player) {
-    if (!player) return; document.getElementById('my-profile-content').style.display = 'block';
-    document.getElementById('my-kd').innerText = player.kd || 0; document.getElementById('my-kda').innerText = player.kda || 0;
+    if (!player) return; 
+    document.getElementById('my-profile-content').style.display = 'block';
+    
+    // Основные статы
+    document.getElementById('my-kd').innerText = player.kd || 0; 
+    document.getElementById('my-kda').innerText = player.kda || 0;
     document.getElementById('my-points').innerText = player.points || 0;
     document.getElementById('my-squad').innerText = player.squad ? `${player.squad} (${player.role})` : 'Не в отряде';
+    
+    // Статус
+    const statusEl = document.getElementById('my-status');
+    statusEl.innerText = player.status || 'в клане';
+    statusEl.style.color = player.status === 'кикнут' ? 'var(--danger-color)' : (player.status === 'в обработке' ? 'var(--accent-color)' : 'var(--success-color)');
+
+    // Таблица посещаемости
+    const attContainer = document.getElementById('my-attendance-table');
+    let q = supabaseClient.from('attendance').select('*').eq('player_id', player.id);
+    q = filterBySeason(q);
+    const { data: att } = await q;
+    
+    let html = '<table class="attendance-table" style="font-size:0.85em;"><thead><tr><th>Турнир</th><th>Э1</th><th>Э2</th><th>Э3</th></tr></thead><tbody>';
+    const maxT = Math.max(3, ...(att || []).map(a => Math.ceil(a.tournament_number / 3)));
+    for (let t = 1; t <= maxT; t++) {
+        html += `<tr><td>Турнир ${t}</td>`;
+        for (let st = 1; st <= 3; st++) {
+            const globalStage = (t - 1) * 3 + st;
+            const record = att ? att.find(a => a.tournament_number === globalStage) : null;
+            const status = record ? record.status : '-';
+            let color = status === 'Пришел' ? 'var(--success-color)' : (status === 'Не пришел' ? 'var(--danger-color)' : (status === 'Отгул' ? 'var(--accent-color)' : '#555'));
+            html += `<td style="color:${color}; font-weight:bold;" title="${status}">${status === 'Пришел' ? '✓' : (status === 'Не пришел' ? '✗' : (status === 'Отгул' ? 'О' : '-'))}</td>`;
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    attContainer.innerHTML = att && att.length > 0 ? html : '<div style="color:var(--text-muted); text-align:center; padding:10px;">Нет данных о посещаемости</div>';
+
+    // Ближайшие турниры
+    const evContainer = document.getElementById('my-upcoming-events');
+    let qEv = supabaseClient.from('clan_calendar').select('*').gte('match_date', new Date().toISOString().split('T')[0]).order('match_date', { ascending: true }).limit(3);
+    qEv = filterBySeason(qEv);
+    const { data: events } = await qEv;
+    
+    if (events && events.length > 0) {
+        evContainer.innerHTML = events.map(e => `
+            <div style="padding: 8px; border-bottom: 1px solid var(--border-color);">
+                <span style="color:var(--accent-color); font-weight:bold;">${new Date(e.match_date).toLocaleDateString('ru-RU')}</span> в ${e.match_time ? e.match_time.slice(0,5) : '--:--'}
+                <span style="float:right; color:var(--text-muted);">Турнир ${e.tournament_number || '-'}</span>
+            </div>
+        `).join('');
+    } else {
+        evContainer.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:10px;">Нет предстоящих турниров</div>';
+    }
 }
+
+// ==================== РАБОТА С СОСТАВОМ ====================
 
 function initDragAndDrop(filterText = '') {
     const board = document.getElementById('roster-board'); if (!board) return; board.innerHTML = '';
@@ -788,6 +790,8 @@ async function removeFromSquad(id) {
     await supabaseClient.from('players').update({ squad: null, role: null }).eq('id', id);
     await loadAllData(); initDragAndDrop();
 }
+
+// ==================== ПОСЕЩАЕМОСТЬ ====================
 
 async function loadAttendance() {
     let qP = supabaseClient.from('players').select('*'), qA = supabaseClient.from('attendance').select('*');
@@ -877,6 +881,8 @@ async function deleteTournament() {
     maxAttendanceStage -= 3; loadAttendance();
 }
 
+// ==================== ПРОПУСКИ ====================
+
 async function loadAllMissed() {
     const tbody = document.getElementById('missed-table-body');
     if (!tbody) return;
@@ -935,6 +941,8 @@ async function updateMissedStatus(playerId, globalStage, newStatus) {
     }
     await loadAllMissed(); loadAttendance();
 }
+
+// ==================== СТАТИСТИКА ====================
 
 async function loadMatchStats() {
     let qP = supabaseClient.from('players').select('*'), qS = supabaseClient.from('match_stats').select('*');
@@ -1021,6 +1029,8 @@ async function recalculatePlayerStats(playerId) {
     }
 }
 
+// ==================== СРАВНЕНИЕ ====================
+
 function initCompareTab() {
     const select = document.getElementById('compare-players'), periodSelect = document.getElementById('compare-period');
     if (select.tomselect) select.tomselect.destroy(); if (periodSelect.tomselect) periodSelect.tomselect.destroy();
@@ -1065,6 +1075,8 @@ function renderComparison() {
     container.innerHTML = `<table class="compare-table">${thead}${tbody}</table>`;
 }
 
+// ==================== ИСТОРИЯ ====================
+
 async function loadMatchHistory() {
     const timeline = document.getElementById('history-timeline'); if (!timeline) return;
     timeline.innerHTML = '<div style="text-align:center; width:100%;">Загрузка...</div>';
@@ -1104,8 +1116,6 @@ async function loadMatchHistory() {
     updateHistoryStats(totalRating, finalTier.name, totalGears, wins, losses, draws);
 
     timeline.innerHTML = '';
-    // Показываем матчи в естественной последовательности: сначала ранние даты,
-    // а внутри одной даты — этапы 1, 2, 3 ... по возрастанию номера.
     const orderedMatches = [...matches].sort((a, b) => {
         const stageA = Number.isFinite(Number(a.stage_number)) && a.stage_number !== null ? Number(a.stage_number) : Number.MAX_SAFE_INTEGER;
         const stageB = Number.isFinite(Number(b.stage_number)) && b.stage_number !== null ? Number(b.stage_number) : Number.MAX_SAFE_INTEGER;
@@ -1194,7 +1204,6 @@ function escapeHtml(value) {
 
 async function updateMatchData(id, field, value) {
     if (!isAdmin) return;
-
     const allowedFields = ['match_date', 'enemy_name', 'map_name', 'clan_score', 'enemy_points'];
     if (!allowedFields.includes(field)) {
         showToast('Это поле нельзя редактировать', 'error');
@@ -1220,8 +1229,7 @@ async function updateMatchData(id, field, value) {
         return;
     }
 
-    showToast(field === 'enemy_name' ? 'Название вражеского клана сохранено' :
-        field === 'map_name' ? 'Название карты сохранено' : 'Изменения сохранены', 'success');
+    showToast(field === 'enemy_name' ? 'Название вражеского клана сохранено' : field === 'map_name' ? 'Название карты сохранено' : 'Изменения сохранены', 'success');
     await loadMatchHistory();
 }
 
@@ -1244,267 +1252,85 @@ function renderHistoryChart(wins, losses, draws = 0) {
     });
 }
 
-function getCalendarGroupKey(event) {
-    const time = event.match_time ? String(event.match_time).slice(0, 5) : '';
-    return `${Number(event.season_id) || 1}_${event.match_date}_${Number(event.tournament_number) || 1}_${time}`;
-}
+// ==================== КАЛЕНДАРЬ ====================
 
-function getCalendarDateTime(event) {
-    if (!event.match_date || !event.match_time) return null;
-    const time = String(event.match_time).slice(0, 8);
-    const parsed = new Date(`${event.match_date}T${time}`);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function getLocalDateString(date = new Date()) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-// Переносит все этапы одного события календаря в историю.
-// Повторный запуск безопасен: уже существующие этапы повторно не добавляются.
-async function transferCalendarEventsToHistory(calendarEvents) {
-    if (!calendarEvents || calendarEvents.length === 0) {
-        return { ok: false, error: 'Событие календаря не найдено' };
-    }
-
-    const first = calendarEvents[0];
-    const tournamentNumber = Math.max(1, parseInt(first.tournament_number, 10) || 1);
-    const seasonId = parseInt(first.season_id, 10) || 1;
-    let localStages = [...new Set(calendarEvents
-        .map(event => parseInt(event.stage_number, 10))
-        .filter(stage => Number.isInteger(stage) && stage >= 1 && stage <= 3))]
-        .sort((a, b) => a - b);
-
-    // Если в календаре у события не указан конкретный этап, создаём стандартные 3 этапа.
-    if (localStages.length === 0) localStages = [1, 2, 3];
-
-    const historyRows = localStages.map(localStage => ({
-        match_date: first.match_date || getLocalDateString(),
-        clan_score: 0,
-        enemy_points: 0,
-        enemy_name: 'Неизвестный враг',
-        map_name: 'Низина',
-        stage_number: (tournamentNumber - 1) * 3 + localStage,
-        season_id: seasonId
-    }));
-
-    const stageNumbers = historyRows.map(row => row.stage_number);
-    const { data: existingMatches, error: readError } = await supabaseClient
-        .from('clan_matches')
-        .select('stage_number')
-        .eq('season_id', seasonId)
-        .in('stage_number', stageNumbers);
-
-    if (readError) return { ok: false, error: readError.message };
-
-    const existingStages = new Set((existingMatches || []).map(row => Number(row.stage_number)));
-    const missingRows = historyRows.filter(row => !existingStages.has(row.stage_number));
-
-    if (missingRows.length > 0) {
-        const { error: insertError } = await supabaseClient.from('clan_matches').insert(missingRows);
-        if (insertError) return { ok: false, error: insertError.message };
-    }
-
-    const calendarIds = calendarEvents.map(event => event.id).filter(id => id !== null && id !== undefined);
-    if (calendarIds.length > 0) {
-        const { error: deleteError } = await supabaseClient
-            .from('clan_calendar')
-            .delete()
-            .in('id', calendarIds);
-        if (deleteError) return { ok: false, error: deleteError.message };
-    }
-
-    return { ok: true, created: missingRows.length, stages: historyRows.length, deleted: calendarIds.length };
-}
-
-// Автоматически переносит наступившие события. Работает для всех сезонов,
-// чтобы смена выбранного сезона не оставляла старые события в календаре.
-async function processDueCalendarEvents() {
-    if (!isAdmin || isProcessingCalendarEvents) return 0;
-    isProcessingCalendarEvents = true;
-
-    try {
-        const { data: events, error } = await supabaseClient.from('clan_calendar').select('*');
-        if (error) {
-            console.error('Ошибка проверки календаря:', error.message);
-            return 0;
-        }
-
-        const now = new Date();
-        const groups = new Map();
-
-        (events || []).forEach(event => {
-            const eventDateTime = getCalendarDateTime(event);
-            // Для автоматического переноса обязательно задано точное время.
-            if (!eventDateTime || eventDateTime > now) return;
-
-            const key = getCalendarGroupKey(event);
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key).push(event);
-        });
-
-        let transferred = 0;
-        for (const group of groups.values()) {
-            const result = await transferCalendarEventsToHistory(group);
-            if (result.ok) {
-                transferred++;
-            } else {
-                console.error('Не удалось перенести событие календаря:', result.error);
-            }
-        }
-
-        if (transferred > 0) {
-            showToast(`В историю автоматически перенесено событий: ${transferred}`, 'success');
-        }
-        return transferred;
-    } catch (error) {
-        console.error('processDueCalendarEvents:', error);
-        return 0;
-    } finally {
-        isProcessingCalendarEvents = false;
-    }
-}
-
-function startCalendarAutoArchive() {
-    if (!isAdmin || calendarAutoArchiveTimer) return;
-
-    const runCheck = async () => {
-        const transferred = await processDueCalendarEvents();
-        if (transferred <= 0) return;
-
-        const activeTab = document.querySelector('.tab-content.active');
-        if (activeTab?.id === 'tab-calendar') await loadCalendar(true);
-        if (activeTab?.id === 'tab-history') await loadMatchHistory();
-        if (activeTab?.id === 'tab-stats') await loadMatchStats();
-        if (activeTab?.id === 'tab-attendance') await loadAttendance();
-    };
-
-    // Проверяем сразу, затем раз в минуту и при возвращении на вкладку браузера.
-    runCheck();
-    calendarAutoArchiveTimer = setInterval(runCheck, 60 * 1000);
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) runCheck();
-    });
-    window.addEventListener('focus', runCheck);
-}
-
-async function loadCalendar(skipAutoArchive = false) {
-    const list = document.getElementById('calendar-list');
-    if (!list) return;
-    list.innerHTML = 'Загрузка...';
-
-    if (isAdmin && !skipAutoArchive) await processDueCalendarEvents();
-
-    const { data: events, error } = await supabaseClient
-        .from('clan_calendar')
-        .select('*')
-        .order('match_date', { ascending: true })
-        .order('tournament_number', { ascending: true });
-    if (error) {
-        list.innerHTML = `<div style="color:red;">Ошибка БД: ${error.message}</div>`;
-        return;
-    }
-
+async function loadCalendar() {
+    const list = document.getElementById('calendar-list'); if (!list) return; list.innerHTML = 'Загрузка...';
+    const { data: events, error } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('tournament_number', { ascending: true });
+    if (error) { list.innerHTML = `<div style="color:red;">Ошибка БД: ${error.message}</div>`; return; }
+    
     let qMatches = supabaseClient.from('clan_matches').select('stage_number');
     qMatches = filterBySeason(qMatches);
     const { data: matches } = await qMatches;
-    let maxStage = 0;
-    if (matches && matches.length > 0) {
-        maxStage = Math.max(...matches.map(match => Number(match.stage_number) || 0));
-    }
+    let maxStage = 0; if (matches && matches.length > 0) { maxStage = Math.max(...matches.map(m => m.stage_number || 0)); }
     const bulkInput = document.getElementById('bulk-start-tournament');
     if (bulkInput) bulkInput.value = (Math.ceil(maxStage / 3) || 0) + 1;
 
     const showPast = document.getElementById('show-past-calendar')?.checked || false;
     const now = new Date();
-    const todayStr = getLocalDateString(now);
+    const todayStr = new Date().toISOString().split('T')[0];
 
-    const filteredEvents = (events || []).filter(event => {
-        const seasonMatch = activeSeasonId === 'all' || Number(event.season_id) === Number(activeSeasonId);
+    const filteredEvents = (events || []).filter(e => {
+        const seasonMatch = activeSeasonId === 'all' || Number(e.season_id) === Number(activeSeasonId);
         if (!seasonMatch) return false;
         if (showPast) return true;
-        if (event.match_date < todayStr) return false;
-        const eventDateTime = getCalendarDateTime(event);
-        if (eventDateTime && eventDateTime <= now) return false;
+        if (e.match_date < todayStr) return false;
+        if (e.match_date === todayStr && e.match_time) {
+            const eventDateTime = new Date(`${e.match_date}T${e.match_time}`);
+            const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+            if (eventDateTime < threeHoursAgo) return false;
+        }
         return true;
     });
 
-    if (filteredEvents.length === 0) {
-        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет предстоящих турниров</div>';
-        return;
+    if (filteredEvents.length === 0) { 
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет предстоящих турниров</div>'; 
+        return; 
     }
-
+    
     const grouped = {};
-    filteredEvents.forEach(event => {
-        const key = getCalendarGroupKey(event);
-        if (!grouped[key]) {
-            grouped[key] = {
-                date: event.match_date,
-                time: event.match_time,
-                tourney: event.tournament_number,
-                seasonId: event.season_id,
-                notes: event.notes,
-                stages: [],
-                ids: []
-            };
-        }
-        if (event.stage_number) grouped[key].stages.push(Number(event.stage_number));
-        grouped[key].ids.push(event.id);
+    filteredEvents.forEach(e => {
+        const key = `${e.match_date}_${e.tournament_number}_${e.match_time}`;
+        if (!grouped[key]) grouped[key] = { date: e.match_date, time: e.match_time, tourney: e.tournament_number, notes: e.notes, stages: [], ids: [] };
+        if (e.stage_number) grouped[key].stages.push(e.stage_number); grouped[key].ids.push(e.id);
     });
-
+    
     list.innerHTML = '';
-    Object.values(grouped).forEach(group => {
-        const isPast = group.date < todayStr;
-        const dateStr = group.date ? new Date(`${group.date}T00:00:00`).toLocaleDateString('ru-RU') : 'Дата не указана';
-        const timeStr = group.time ? String(group.time).slice(0, 5) : '';
-        const stagesStr = group.stages.length > 0
-            ? [...new Set(group.stages)].sort((a, b) => a - b).join(', ')
-            : '-';
-        const idsStr = group.ids.join(',');
+    Object.values(grouped).forEach(g => {
+        const isPast = g.date < todayStr;
+        const dateStr = g.date ? new Date(g.date).toLocaleDateString('ru-RU') : 'Дата не указана', timeStr = g.time ? g.time.slice(0, 5) : '';
+        const stagesStr = g.stages.length > 0 ? g.stages.sort((a,b)=>a-b).join(', ') : '-', idsStr = g.ids.join(',');
         const opacity = isPast ? '0.5' : '1';
-        const pastTag = isPast
-            ? '<span style="color:var(--danger-color); font-size:0.8em; margin-left:10px;">(ПРОШЕЛ)</span>'
-            : '';
+        const pastTag = isPast ? '<span style="color:var(--danger-color); font-size:0.8em; margin-left:10px;">(ПРОШЕЛ)</span>' : '';
 
         list.innerHTML += `
         <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; padding:15px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:4px; opacity:${opacity};">
             <div>
                 <div style="color:var(--accent-color); font-weight:bold; font-size:1.1em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''} ${pastTag}</div>
-                <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${group.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
-                <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${group.notes || ''}</div>
+                <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${g.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
+                <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${g.notes || ''}</div>
             </div>
             ${isAdmin ? `
             <div style="display:flex; gap:10px; align-items:center;">
-                <button class="btn" style="background:var(--accent-color); color:#000;" onclick="moveCalendarToHistory([${idsStr}])">Провести матч</button>
+                <button class="btn" style="background:var(--accent-color); color:#000;" onclick="moveCalendarToHistory(${g.ids[0]}, '${g.date}', ${g.tourney}, ${g.stages[0] || 1})">Провести матч</button>
                 <button class="btn btn-danger" style="padding: 6px 12px;" onclick="deleteCalendarEvents([${idsStr}])">X</button>
             </div>` : ''}
         </div>`;
     });
 }
 
-async function moveCalendarToHistory(calendarIds) {
-    if (!isAdmin) return showToast('Нужен вход администратора', 'error');
-    if (!confirm('Перенести все этапы этого события в Историю матчей?')) return;
+async function moveCalendarToHistory(calId, date, tourney, stage) {
+    if (!isAdmin || !confirm('Перенести в Историю матчей? (Турнир исчезнет из календаря)')) return;
+    const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
 
-    const ids = Array.isArray(calendarIds) ? calendarIds : [calendarIds];
-    const { data: events, error } = await supabaseClient
-        .from('clan_calendar')
-        .select('*')
-        .in('id', ids);
+    const { error: insErr } = await supabaseClient.from('clan_matches').insert([{
+        match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Неизвестный враг', map_name: 'Низина', stage_number: tourney || 1, season_id: seasonId
+    }]);
 
-    if (error) return showToast('Ошибка чтения календаря: ' + error.message, 'error');
-    if (!events || events.length === 0) return showToast('Событие уже перенесено или удалено', 'info');
-
-    const result = await transferCalendarEventsToHistory(events);
-    if (!result.ok) return showToast('Ошибка переноса: ' + result.error, 'error');
-
-    showToast(`Событие перенесено. Этапов в истории: ${result.stages || 0}`, 'success');
-    await loadCalendar(true);
-    await loadMatchHistory();
-    if (document.getElementById('tab-stats')?.classList.contains('active')) await loadMatchStats();
+    if (insErr) return showToast('Ошибка: ' + insErr.message, 'error');
+    await supabaseClient.from('clan_calendar').delete().eq('id', calId);
+    showToast('Турнир перенесен в Историю!', 'success');
+    loadCalendar(); loadMatchHistory();
 }
 
 async function addUpcomingMatch() {
@@ -1563,6 +1389,8 @@ async function deleteCalendarEvents(ids) {
     loadCalendar(); showToast('Удалено', 'success');
 }
 
+// ==================== ШТРАФЫ ====================
+
 async function loadFines() {
     const { data } = await supabaseClient.from('fines').select('*, players(nickname)').order('created_at', { ascending: false });
     const tb = document.getElementById('fines-table-body'); if (!tb) return;
@@ -1578,6 +1406,8 @@ async function addFine() {
 
 async function toggleFineStatus(id, st) { await supabaseClient.from('fines').update({ status: st === 'open' ? 'closed' : 'open' }).eq('id', id); loadFines(); }
 async function deleteFine(id) { if (confirm('Удалить?')) { await supabaseClient.from('fines').delete().eq('id', id); loadFines(); } }
+
+// ==================== АНАЛИТИКА ====================
 
 async function loadAnalytics() {
     let q = supabaseClient.from('players').select('*'); q = filterBySeason(q); const { data: players } = await q;
@@ -1644,6 +1474,8 @@ async function loadAnalytics() {
     }
 }
 
+// ==================== ЗАМЕТКИ ====================
+
 async function loadPlayerNotes(playerId) {
     const { data: notes, error } = await supabaseClient.from('player_notes').select('*').eq('player_id', playerId).order('created_at', { ascending: false });
     const coachList = document.getElementById('player-notes-list'), tkList = document.getElementById('player-timekeeper-notes-list');
@@ -1672,7 +1504,7 @@ async function deletePlayerNote(noteId, playerId) {
 async function sendAnalyticsScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 async function sendRosterScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 
-// ==================== СЖАТИЕ И РАСПОЗНАВАНИЕ ФОТО ====================
+// ==================== РАСПОЗНАВАНИЕ ФОТО ====================
 
 function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) {
     return new Promise((resolve, reject) => {
@@ -1691,7 +1523,7 @@ function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                resolve(dataUrl.split(',')[1]); // Return base64 part
+                resolve(dataUrl.split(',')[1]); 
             };
             img.onerror = (err) => reject(err);
         };
@@ -1809,68 +1641,6 @@ function closePhotoModal() {
     }
 }
 
-async function ensureHistoryEntryForStage(globalStage, seasonId, matchInfo = {}) {
-    const historyPatch = {};
-
-    if (typeof matchInfo.enemy_name === 'string' && matchInfo.enemy_name.trim()) {
-        historyPatch.enemy_name = matchInfo.enemy_name.trim();
-    }
-    if (Number.isFinite(matchInfo.clan_score) && matchInfo.clan_score >= 0) {
-        historyPatch.clan_score = Math.round(matchInfo.clan_score);
-    }
-    if (Number.isFinite(matchInfo.enemy_points) && matchInfo.enemy_points >= 0) {
-        historyPatch.enemy_points = Math.round(matchInfo.enemy_points);
-    }
-
-    const { data: existing, error: findError } = await supabaseClient
-        .from('clan_matches')
-        .select('id')
-        .eq('season_id', seasonId)
-        .eq('stage_number', globalStage)
-        .order('id', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-    if (findError) return { created: false, updated: false, error: findError.message };
-
-    if (existing) {
-        if (Object.keys(historyPatch).length === 0) {
-            return { created: false, updated: false };
-        }
-        const { error: updateError } = await supabaseClient
-            .from('clan_matches')
-            .update(historyPatch)
-            .eq('id', existing.id);
-        if (updateError) return { created: false, updated: false, error: updateError.message };
-        return { created: false, updated: true };
-    }
-
-    const tournamentNumber = Math.ceil(globalStage / 3);
-    const localStage = ((globalStage - 1) % 3) + 1;
-    const { data: calendarEvent } = await supabaseClient
-        .from('clan_calendar')
-        .select('match_date')
-        .eq('season_id', seasonId)
-        .eq('tournament_number', tournamentNumber)
-        .eq('stage_number', localStage)
-        .order('match_date', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-    const { error: insertError } = await supabaseClient.from('clan_matches').insert([{
-        match_date: calendarEvent?.match_date || getLocalDateString(),
-        clan_score: historyPatch.clan_score ?? 0,
-        enemy_points: historyPatch.enemy_points ?? 0,
-        enemy_name: historyPatch.enemy_name || 'Неизвестный враг',
-        map_name: 'Низина',
-        stage_number: globalStage,
-        season_id: seasonId
-    }]);
-
-    if (insertError) return { created: false, updated: false, error: insertError.message };
-    return { created: true, updated: false };
-}
-
 async function confirmPhotoUpload() {
     if (currentPhotoFiles.length === 0) return showToast('Файлы не выбраны', 'error');
     if (!GEMINI_API_KEY || GEMINI_API_KEY.trim() === '') return showToast('Ошибка: Не указан ключ Gemini в appv6.js', 'error');
@@ -1878,7 +1648,7 @@ async function confirmPhotoUpload() {
     const tourneySelects = document.querySelectorAll('.photo-tourney-select');
     const stageSelects = document.querySelectorAll('.photo-stage-select');
     const uploads = [];
-
+    
     tourneySelects.forEach((select, index) => {
         const tourney = parseInt(select.value, 10);
         const stage = parseInt(stageSelects[index]?.value, 10);
@@ -1892,14 +1662,10 @@ async function confirmPhotoUpload() {
     showToast(`Сжатие и отправка ${uploads.length} фото в ИИ...`, 'info');
     closePhotoModal();
 
-    let totalRecognized = 0;
-    let totalSaved = 0;
-    let totalHistoryCreated = 0;
-    let totalHistoryUpdated = 0;
-    let totalMatchDetailsSaved = 0;
-    let totalErrors = 0;
-
-    const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
+    pendingMatchedPlayers = []; // Сбрасываем перед новым
+    pendingAbsentPlayers = []; // Сбрасываем перед новым
+    let currentUploadStage = null;
+    let currentSeasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
 
     for (const upload of uploads) {
         try {
@@ -1907,14 +1673,12 @@ async function confirmPhotoUpload() {
 
             const fetchWithRetry = async (retries = 3, timeoutMs = 15000) => {
                 const models = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
-
                 for (let i = 0; i < retries; i++) {
                     const currentModel = models[i % models.length];
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
                     try {
-                        console.log(`[Попытка ${i + 1}/${retries}] Модель: ${currentModel}`);
                         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1922,7 +1686,7 @@ async function confirmPhotoUpload() {
                             body: JSON.stringify({
                                 contents: [{
                                     parts: [
-                                        { text: `Проанализируй скриншот игры STALZONE. Извлеки ВСЕ данные, которые действительно видны на изображении.\n\nНАШ КЛАН называется STALZONE. Если на итоговом табло видны названия двух кланов и их командные очки, определи сторону STALZONE и верни её счёт в clan_score, а счёт противоположного клана в enemy_points. В enemy_name укажи название именно вражеского клана. Не перепутай стороны.\n\nВАЖНО: не путай командный счёт матча с индивидуальными PTS игроков. Если на фото только таблица игроков и командный счёт не показан, верни clan_score=null и enemy_points=null. Если невозможно уверенно понять, какая сторона принадлежит STALZONE, тоже верни оба счёта null. Не придумывай название клана или цифры.\n\nДля каждого видимого игрока извлеки nickname, K (убийства) в k, D (смерти) в d, A (ассисты) в a, PTS в pts. Если на фото только список ников без статистики, укажи нули для k, d, a, pts.\n\nВерни ТОЛЬКО один валидный JSON-объект. Используй такую структуру: {\"enemy_name\": null, \"clan_score\": null, \"enemy_points\": null, \"players\": []}. В enemy_name подставь только реально прочитанное название вражеского клана или null. В clan_score и enemy_points подставь целые числа с табло или null. В players помести массив объектов игроков с полями nickname, k, d, a, pts. Если игроков нет, оставь players пустым массивом. Не возвращай текст-заполнитель вместо null, не добавляй markdown и пояснения.` },
+                                        { text: `Проанализируй скриншот игры STALZONE. Извлеки список ников игроков, которые есть на фото. Верни ТОЛЬКО JSON-массив строк. Пример: ["Ник1", "Ник2"]. Никакого другого текста.` },
                                         { inline_data: { mime_type: 'image/jpeg', data: base64Data } }
                                     ]
                                 }]
@@ -1931,107 +1695,144 @@ async function confirmPhotoUpload() {
 
                         clearTimeout(timeoutId);
                         const resData = await response.json();
-                        if (!response.ok) {
-                            const message = resData?.error?.message || `HTTP ${response.status}`;
-                            if (response.status === 503 || response.status === 429) throw new Error(message);
-                            throw new Error(message);
-                        }
+                        if (!response.ok) throw new Error(resData?.error?.message || `HTTP ${response.status}`);
                         if (resData.error) throw new Error(resData.error.message);
                         return resData;
                     } catch (err) {
                         clearTimeout(timeoutId);
                         if (i === retries - 1) throw err;
-                        const isTimeout = err.name === 'AbortError';
-                        console.warn(`Попытка ${i + 1} не удалась (${isTimeout ? 'Тайм-аут' : err.message}). Повтор...`);
-                        showToast('Сервер Google не ответил. Повторяем запрос...', 'info');
                         await new Promise(resolve => setTimeout(resolve, 3000));
                     }
                 }
             };
 
             const resData = await fetchWithRetry();
-            const textResponse = resData?.candidates?.[0]?.content?.parts
-                ?.map(part => part.text || '')
-                .filter(Boolean)
-                .join('\n') || '';
-            if (!textResponse) throw new Error('ИИ вернул пустой ответ');
-
-            console.log('Сырой ответ ИИ:', textResponse);
-            const screenshotData = extractMatchScreenshotData(textResponse);
-            const parsedData = screenshotData.players;
-            totalRecognized += parsedData.length;
-
-            let uploadMatchedAnyPlayer = false;
-            for (const obj of parsedData) {
-                const rawNick = typeof obj === 'string' ? obj : obj?.nickname;
-                if (!rawNick || typeof rawNick !== 'string') continue;
-                const matchedPlayer = findBestPlayerMatch(rawNick, activePlayers);
-                if (!matchedPlayer) {
-                    console.warn('Игрок с фото не найден в базе:', rawNick);
-                    continue;
-                }
-
-                uploadMatchedAnyPlayer = true;
-
-                // 1. Отмечаем присутствие игрока.
-                const { error: attendanceError } = await supabaseClient.from('attendance').upsert({
-                    player_id: matchedPlayer.id,
-                    tournament_number: upload.globalStage,
-                    status: 'Пришел',
-                    season_id: seasonId
-                }, { onConflict: 'player_id, tournament_number, season_id' });
-                if (attendanceError) throw new Error(`Посещаемость (${rawNick}): ${attendanceError.message}`);
-
-                // 2. Сохраняем индивидуальные показатели, если они действительно присутствуют.
-                if (typeof obj === 'object' && obj !== null && (Number(obj.k) > 0 || Number(obj.d) > 0 || Number(obj.a) > 0 || Number(obj.pts) > 0)) {
-                    const { error: statsError } = await supabaseClient.from('match_stats').upsert({
-                        player_id: matchedPlayer.id,
-                        stage_number: upload.globalStage,
-                        kills: parseInt(obj.k, 10) || 0,
-                        deaths: parseInt(obj.d, 10) || 0,
-                        assists: parseInt(obj.a, 10) || 0,
-                        points: parseInt(obj.pts, 10) || 0,
-                        season_id: seasonId
-                    }, { onConflict: 'player_id, stage_number, season_id' });
-                    if (statsError) throw new Error(`Статистика (${rawNick}): ${statsError.message}`);
-                    await recalculatePlayerStats(matchedPlayer.id);
-                }
-                totalSaved++;
+            const textResponse = resData?.candidates?.[0]?.content?.parts?.map(part => part.text || '').filter(Boolean).join('\n') || '';
+            
+            // Парсим массив ников (простой парсер)
+            let foundNicks = [];
+            try {
+                const clean = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const jsonMatch = clean.match(/\[[\s\S]*\]/);
+                if (jsonMatch) foundNicks = JSON.parse(jsonMatch[0].replace(/'/g, '"'));
+                if (!Array.isArray(foundNicks)) foundNicks = [];
+            } catch (e) {
+                console.warn("Не удалось распарсить JSON:", textResponse);
             }
 
-            // Сохраняем счёт и название врага в карточку истории нужного этапа.
-            // Это сработает и для отдельного скриншота итогового табло без списка игроков.
-            const hasMatchDetails = Boolean(screenshotData.enemy_name)
-                || screenshotData.clan_score !== null
-                || screenshotData.enemy_points !== null;
-            if (uploadMatchedAnyPlayer || hasMatchDetails) {
-                const historyResult = await ensureHistoryEntryForStage(upload.globalStage, seasonId, screenshotData);
-                if (historyResult.created) totalHistoryCreated++;
-                if (historyResult.updated) totalHistoryUpdated++;
-                if (historyResult.error) throw new Error(`История этапа ${upload.globalStage}: ${historyResult.error}`);
-                if (hasMatchDetails) totalMatchDetailsSaved++;
-            } else if (parsedData.length === 0) {
-                showToast(`На фото для этапа ${upload.globalStage} не найдены данные игроков или счёта матча`, 'info');
+            if (foundNicks.length === 0) {
+                showToast(`ИИ не нашел ников на фото (Этап ${upload.globalStage})`, 'info');
+                continue;
             }
+
+            currentUploadStage = upload.globalStage;
+            
+            // Находим совпадения
+            const matchedIds = new Set();
+            foundNicks.forEach(rawNick => {
+                const match = findBestPlayerMatch(rawNick, activePlayers);
+                if (match && !matchedIds.has(match.id)) {
+                    matchedIds.add(match.id);
+                    pendingMatchedPlayers.push(match);
+                }
+            });
+
+            // Находим отсутствующих
+            const absent = activePlayers.filter(p => !matchedIds.has(p.id));
+            
+            absent.forEach(p => {
+                // Проверяем, есть ли уже запись для этого этапа
+                const existing = allAttendance.find(a => a.player_id === p.id && a.tournament_number === upload.globalStage);
+                pendingAbsentPlayers.push({
+                    id: p.id,
+                    nickname: p.nickname,
+                    existingStatus: existing ? existing.status : 'Не пришел'
+                });
+            });
+
         } catch (err) {
-            totalErrors++;
-            console.error('Ошибка обработки фотографии:', err);
-            showToast('Ошибка обработки фото: ' + err.message, 'error');
+            console.error('Ошибка обработки фото:', err);
+            showToast('Ошибка ИИ: ' + err.message, 'error');
         }
     }
 
-    if (totalRecognized > 0 || totalSaved > 0 || totalMatchDetailsSaved > 0) {
-        showToast(`Игроков распознано: ${totalRecognized}; сохранено: ${totalSaved}; данные счёта/врага: ${totalMatchDetailsSaved}; новых этапов истории: ${totalHistoryCreated}; обновлено этапов: ${totalHistoryUpdated}.`, totalErrors ? 'info' : 'success');
-    } else {
-        showToast('Не удалось распознать данные на фотографиях. Проверь качество снимков.', 'error');
+    // Сохраняем "Пришедших" сразу
+    if (pendingMatchedPlayers.length > 0 && currentUploadStage) {
+        for (const p of pendingMatchedPlayers) {
+            await supabaseClient.from('attendance').upsert({
+                player_id: p.id, tournament_number: currentUploadStage, status: 'Пришел', season_id: currentSeasonId
+            }, { onConflict: 'player_id, tournament_number, season_id' });
+        }
+        showToast(`Распознано и отмечено как "Пришел": ${pendingMatchedPlayers.length}`, 'success');
     }
 
-    if (document.getElementById('tab-attendance')?.classList.contains('active')) await loadAttendance();
-    if (document.getElementById('tab-stats')?.classList.contains('active')) await loadMatchStats();
-    if (document.getElementById('tab-history')?.classList.contains('active')) await loadMatchHistory();
+    // Если есть отсутствующие, открываем модалку
+    if (pendingAbsentPlayers.length > 0) {
+        currentAbsentStage = currentUploadStage;
+        pendingSeasonId = currentSeasonId;
+        openAbsentModal();
+    } else {
+        loadAttendance();
+        loadMatchStats();
+    }
 }
 
-function saveAbsentStatuses() {
+function openAbsentModal() {
+    const listContainer = document.getElementById('absent-players-list');
+    listContainer.innerHTML = '';
+    
+    pendingAbsentPlayers.forEach(p => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid var(--border-color);';
+        div.innerHTML = `
+            <span style="font-weight:bold; font-family:'Courier New', monospace;">${p.nickname}</span>
+            <select id="absent-select-${p.id}" style="width:140px; padding:4px; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); border-radius:4px;">
+                <option value="Не пришел" ${p.existingStatus === 'Не пришел' ? 'selected' : ''}>Не пришел</option>
+                <option value="Отгул" ${p.existingStatus === 'Отгул' ? 'selected' : ''}>Отгул</option>
+                <option value="Пришел" ${p.existingStatus === 'Пришел' ? 'selected' : ''}>Пришел</option>
+            </select>
+        `;
+        listContainer.appendChild(div);
+    });
+    
+    document.getElementById('absent-modal').style.display = 'flex';
+}
+
+async function saveAbsentStatuses() {
+    if (!currentAbsentStage || pendingAbsentPlayers.length === 0) {
+        document.getElementById('absent-modal').style.display = 'none';
+        return;
+    }
+
+    let updated = 0;
+    for (const p of pendingAbsentPlayers) {
+        const selectEl = document.getElementById(`absent-select-${p.id}`);
+        const status = selectEl ? selectEl.value : 'Не пришел';
+        
+        const { error } = await supabaseClient.from('attendance').upsert({
+            player_id: p.id,
+            tournament_number: currentAbsentStage,
+            status: status,
+            season_id: pendingSeasonId
+        }, { onConflict: 'player_id, tournament_number, season_id' });
+        
+        if (!error) updated++;
+    }
+
+    document.getElementById('absent-modal').style.display = 'none';
+    showToast(`Статусы для отсутствующих сохранены (${updated})`, 'success');
+    
+    // Сбрасываем массивы
+    pendingAbsentPlayers = [];
+    pendingMatchedPlayers = [];
+    currentAbsentStage = null;
+
+    loadAttendance();
+    loadMatchStats();
+    if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
+}
+
+function saveAbsentStatuses_Old() {
     document.getElementById('absent-modal').style.display = 'none';
     showToast('Сохранено', 'success');
 }
