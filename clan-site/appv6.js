@@ -116,6 +116,61 @@ function extractPlayerData(text) {
     }
     return [];
 }
+
+// Разбирает ответ ИИ для одного скриншота. Поддерживает и старый формат-массив,
+// чтобы фотографии по-прежнему заполняли посещаемость и индивидуальную статистику.
+function extractMatchScreenshotData(text) {
+    const clean = String(text || '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .replace(/[\u00A0\u200B]/g, ' ')
+        .trim();
+
+    let parsed = null;
+    try {
+        parsed = JSON.parse(clean);
+    } catch (e) {
+        const objectMatch = clean.match(/\{[\s\S]*\}/);
+        const arrayMatch = clean.match(/\[[\s\S]*\]/);
+        try {
+            if (objectMatch) parsed = JSON.parse(objectMatch[0]);
+            else if (arrayMatch) parsed = JSON.parse(arrayMatch[0]);
+        } catch (parseError) {
+            console.warn('Не удалось разобрать JSON ответа ИИ:', parseError);
+        }
+    }
+
+    // Совместимость с предыдущим ответом Gemini: [{ nickname, k, d, a, pts }].
+    if (Array.isArray(parsed)) {
+        return { enemy_name: null, clan_score: null, enemy_points: null, players: parsed };
+    }
+    if (!parsed || typeof parsed !== 'object') {
+        return { enemy_name: null, clan_score: null, enemy_points: null, players: [] };
+    }
+
+    const toScore = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const number = Number(value);
+        return Number.isFinite(number) && number >= 0 ? Math.round(number) : null;
+    };
+    const toName = (value) => {
+        if (typeof value !== 'string') return null;
+        const name = value.trim();
+        if (!name || /^(null|неизвестно|неизвестный враг|нет данных|н\/д|-)$/i.test(name)) return null;
+        return name;
+    };
+
+    const players = Array.isArray(parsed.players) ? parsed.players
+        : (Array.isArray(parsed.player_stats) ? parsed.player_stats
+        : (Array.isArray(parsed.data) ? parsed.data : []));
+
+    return {
+        enemy_name: toName(parsed.enemy_name ?? parsed.opponent_clan ?? parsed.enemy_clan ?? parsed.opponent),
+        clan_score: toScore(parsed.clan_score ?? parsed.our_score ?? parsed.stalzone_score),
+        enemy_points: toScore(parsed.enemy_points ?? parsed.opponent_score ?? parsed.enemy_score),
+        players
+    };
+}
 // =======================================================================
 
 // ==================== БЭКАПЫ ====================
@@ -1709,17 +1764,41 @@ function closePhotoModal() {
     }
 }
 
-async function ensureHistoryEntryForStage(globalStage, seasonId) {
+async function ensureHistoryEntryForStage(globalStage, seasonId, matchInfo = {}) {
+    const historyPatch = {};
+
+    if (typeof matchInfo.enemy_name === 'string' && matchInfo.enemy_name.trim()) {
+        historyPatch.enemy_name = matchInfo.enemy_name.trim();
+    }
+    if (Number.isFinite(matchInfo.clan_score) && matchInfo.clan_score >= 0) {
+        historyPatch.clan_score = Math.round(matchInfo.clan_score);
+    }
+    if (Number.isFinite(matchInfo.enemy_points) && matchInfo.enemy_points >= 0) {
+        historyPatch.enemy_points = Math.round(matchInfo.enemy_points);
+    }
+
     const { data: existing, error: findError } = await supabaseClient
         .from('clan_matches')
         .select('id')
         .eq('season_id', seasonId)
         .eq('stage_number', globalStage)
+        .order('id', { ascending: true })
         .limit(1)
         .maybeSingle();
 
-    if (findError) return { created: false, error: findError.message };
-    if (existing) return { created: false };
+    if (findError) return { created: false, updated: false, error: findError.message };
+
+    if (existing) {
+        if (Object.keys(historyPatch).length === 0) {
+            return { created: false, updated: false };
+        }
+        const { error: updateError } = await supabaseClient
+            .from('clan_matches')
+            .update(historyPatch)
+            .eq('id', existing.id);
+        if (updateError) return { created: false, updated: false, error: updateError.message };
+        return { created: false, updated: true };
+    }
 
     const tournamentNumber = Math.ceil(globalStage / 3);
     const localStage = ((globalStage - 1) % 3) + 1;
@@ -1735,16 +1814,16 @@ async function ensureHistoryEntryForStage(globalStage, seasonId) {
 
     const { error: insertError } = await supabaseClient.from('clan_matches').insert([{
         match_date: calendarEvent?.match_date || getLocalDateString(),
-        clan_score: 0,
-        enemy_points: 0,
-        enemy_name: 'Неизвестный враг',
+        clan_score: historyPatch.clan_score ?? 0,
+        enemy_points: historyPatch.enemy_points ?? 0,
+        enemy_name: historyPatch.enemy_name || 'Неизвестный враг',
         map_name: 'Низина',
         stage_number: globalStage,
         season_id: seasonId
     }]);
 
-    if (insertError) return { created: false, error: insertError.message };
-    return { created: true };
+    if (insertError) return { created: false, updated: false, error: insertError.message };
+    return { created: true, updated: false };
 }
 
 async function confirmPhotoUpload() {
@@ -1754,16 +1833,16 @@ async function confirmPhotoUpload() {
     const tourneySelects = document.querySelectorAll('.photo-tourney-select');
     const stageSelects = document.querySelectorAll('.photo-stage-select');
     const uploads = [];
-    
+
     tourneySelects.forEach((select, index) => {
-        const tourney = parseInt(select.value);
-        const stage = parseInt(stageSelects[index].value);
-        const globalStage = (tourney - 1) * 3 + stage; 
-        
-        if (currentPhotoFiles[index]) {
-            uploads.push({ file: currentPhotoFiles[index], globalStage });
-        }
+        const tourney = parseInt(select.value, 10);
+        const stage = parseInt(stageSelects[index]?.value, 10);
+        if (!Number.isInteger(tourney) || !Number.isInteger(stage) || stage < 1 || stage > 3) return;
+        const globalStage = (tourney - 1) * 3 + stage;
+        if (currentPhotoFiles[index]) uploads.push({ file: currentPhotoFiles[index], globalStage });
     });
+
+    if (uploads.length === 0) return showToast('Не удалось определить турнир и этап для фотографий', 'error');
 
     showToast(`Сжатие и отправка ${uploads.length} фото в ИИ...`, 'info');
     closePhotoModal();
@@ -1771,22 +1850,26 @@ async function confirmPhotoUpload() {
     let totalRecognized = 0;
     let totalSaved = 0;
     let totalHistoryCreated = 0;
+    let totalHistoryUpdated = 0;
+    let totalMatchDetailsSaved = 0;
+    let totalErrors = 0;
+
+    const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
 
     for (const upload of uploads) {
         try {
             const base64Data = await compressImage(upload.file);
-            
+
             const fetchWithRetry = async (retries = 3, timeoutMs = 15000) => {
-                const models = ['gemini-3.5-flash', 'gemini-3.5-flash-lite']; 
-                
+                const models = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+
                 for (let i = 0; i < retries; i++) {
-                    const currentModel = models[i % models.length]; 
+                    const currentModel = models[i % models.length];
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
                     try {
                         console.log(`[Попытка ${i + 1}/${retries}] Модель: ${currentModel}`);
-                        
                         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1794,7 +1877,7 @@ async function confirmPhotoUpload() {
                             body: JSON.stringify({
                                 contents: [{
                                     parts: [
-                                        { text: "Проанализируй этот скриншот игры (таблица статистики или посещаемости). Извлеки список игроков. Для каждого игрока найди его никнейм, а также показатели: K (убийства), D (смерти), A (ассисты), PTS (очки). Если на скрине нет цифр (только список ников), то K, D, A, PTS приравняй к 0. Верни ТОЛЬКО валидный JSON-массив объектов в формате: [{\"nickname\": \"Ник1\", \"k\": 10, \"d\": 5, \"a\": 2, \"pts\": 100}, {\"nickname\": \"Ник2\", \"k\": 0, \"d\": 0, \"a\": 0, \"pts\": 0}]. Никакого другого текста, без markdown разметки." },
+                                        { text: `Проанализируй скриншот игры STALZONE. Извлеки ВСЕ данные, которые действительно видны на изображении.\n\nНАШ КЛАН называется STALZONE. Если на итоговом табло видны названия двух кланов и их командные очки, определи сторону STALZONE и верни её счёт в clan_score, а счёт противоположного клана в enemy_points. В enemy_name укажи название именно вражеского клана. Не перепутай стороны.\n\nВАЖНО: не путай командный счёт матча с индивидуальными PTS игроков. Если на фото только таблица игроков и командный счёт не показан, верни clan_score=null и enemy_points=null. Если невозможно уверенно понять, какая сторона принадлежит STALZONE, тоже верни оба счёта null. Не придумывай название клана или цифры.\n\nДля каждого видимого игрока извлеки nickname, K (убийства) в k, D (смерти) в d, A (ассисты) в a, PTS в pts. Если на фото только список ников без статистики, укажи нули для k, d, a, pts.\n\nВерни ТОЛЬКО один валидный JSON-объект. Используй такую структуру: {\"enemy_name\": null, \"clan_score\": null, \"enemy_points\": null, \"players\": []}. В enemy_name подставь только реально прочитанное название вражеского клана или null. В clan_score и enemy_points подставь целые числа с табло или null. В players помести массив объектов игроков с полями nickname, k, d, a, pts. Если игроков нет, оставь players пустым массивом. Не возвращай текст-заполнитель вместо null, не добавляй markdown и пояснения.` },
                                         { inline_data: { mime_type: 'image/jpeg', data: base64Data } }
                                     ]
                                 }]
@@ -1803,102 +1886,104 @@ async function confirmPhotoUpload() {
 
                         clearTimeout(timeoutId);
                         const resData = await response.json();
-                        
-                        if (resData.error && resData.error.code === 503) throw new Error('503');
+                        if (!response.ok) {
+                            const message = resData?.error?.message || `HTTP ${response.status}`;
+                            if (response.status === 503 || response.status === 429) throw new Error(message);
+                            throw new Error(message);
+                        }
                         if (resData.error) throw new Error(resData.error.message);
-
-                        return resData; 
+                        return resData;
                     } catch (err) {
                         clearTimeout(timeoutId);
+                        if (i === retries - 1) throw err;
                         const isTimeout = err.name === 'AbortError';
-                        if (i === retries - 1) throw err; 
-                        
                         console.warn(`Попытка ${i + 1} не удалась (${isTimeout ? 'Тайм-аут' : err.message}). Повтор...`);
-                        showToast(`Сервер Google завис или перегружен. Ждем...`, 'info');
-                        await new Promise(resolve => setTimeout(resolve, 3000)); 
+                        showToast('Сервер Google не ответил. Повторяем запрос...', 'info');
+                        await new Promise(resolve => setTimeout(resolve, 3000));
                     }
                 }
             };
 
             const resData = await fetchWithRetry();
+            const textResponse = resData?.candidates?.[0]?.content?.parts
+                ?.map(part => part.text || '')
+                .filter(Boolean)
+                .join('\n') || '';
+            if (!textResponse) throw new Error('ИИ вернул пустой ответ');
 
-            let textResponse = resData.candidates[0].content.parts[0].text;
-            console.log("Сырой ответ ИИ:", textResponse);
-
-            const parsedData = extractPlayerData(textResponse);
-
-            if (parsedData.length === 0) {
-                showToast(`ИИ не нашел данных на фото для Этапа ${upload.globalStage}.`, 'info');
-                continue;
-            }
-
+            console.log('Сырой ответ ИИ:', textResponse);
+            const screenshotData = extractMatchScreenshotData(textResponse);
+            const parsedData = screenshotData.players;
             totalRecognized += parsedData.length;
-            const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
+
             let uploadMatchedAnyPlayer = false;
-            
             for (const obj of parsedData) {
-                // На всякий случай проверяем, что ИИ вернул объект с ником, а не просто строку
-                const rawNick = typeof obj === 'string' ? obj : obj.nickname;
-                if (!rawNick) continue;
-
+                const rawNick = typeof obj === 'string' ? obj : obj?.nickname;
+                if (!rawNick || typeof rawNick !== 'string') continue;
                 const matchedPlayer = findBestPlayerMatch(rawNick, activePlayers);
-                
-                if (matchedPlayer) {
-                    uploadMatchedAnyPlayer = true;
-                    // 1. Всегда ставим посещаемость "Пришел"
-                    await supabaseClient.from('attendance').upsert({
-                        player_id: matchedPlayer.id,
-                        tournament_number: upload.globalStage,
-                        status: 'Пришел',
-                        season_id: seasonId
-                    }, { onConflict: 'player_id, tournament_number, season_id' });
-
-                    // 2. Если есть цифры (статистика), записываем их
-                    if (typeof obj === 'object' && (obj.k > 0 || obj.d > 0 || obj.a > 0 || obj.pts > 0)) {
-                        await supabaseClient.from('match_stats').upsert({
-                            player_id: matchedPlayer.id,
-                            stage_number: upload.globalStage,
-                            kills: parseInt(obj.k) || 0,
-                            deaths: parseInt(obj.d) || 0,
-                            assists: parseInt(obj.a) || 0,
-                            points: parseInt(obj.pts) || 0,
-                            season_id: seasonId
-                        }, { onConflict: 'player_id, stage_number, season_id' });
-                        
-                        // Пересчитываем общие статы игрока
-                        await recalculatePlayerStats(matchedPlayer.id);
-                    }
-                    totalSaved++;
+                if (!matchedPlayer) {
+                    console.warn('Игрок с фото не найден в базе:', rawNick);
+                    continue;
                 }
+
+                uploadMatchedAnyPlayer = true;
+
+                // 1. Отмечаем присутствие игрока.
+                const { error: attendanceError } = await supabaseClient.from('attendance').upsert({
+                    player_id: matchedPlayer.id,
+                    tournament_number: upload.globalStage,
+                    status: 'Пришел',
+                    season_id: seasonId
+                }, { onConflict: 'player_id, tournament_number, season_id' });
+                if (attendanceError) throw new Error(`Посещаемость (${rawNick}): ${attendanceError.message}`);
+
+                // 2. Сохраняем индивидуальные показатели, если они действительно присутствуют.
+                if (typeof obj === 'object' && obj !== null && (Number(obj.k) > 0 || Number(obj.d) > 0 || Number(obj.a) > 0 || Number(obj.pts) > 0)) {
+                    const { error: statsError } = await supabaseClient.from('match_stats').upsert({
+                        player_id: matchedPlayer.id,
+                        stage_number: upload.globalStage,
+                        kills: parseInt(obj.k, 10) || 0,
+                        deaths: parseInt(obj.d, 10) || 0,
+                        assists: parseInt(obj.a, 10) || 0,
+                        points: parseInt(obj.pts, 10) || 0,
+                        season_id: seasonId
+                    }, { onConflict: 'player_id, stage_number, season_id' });
+                    if (statsError) throw new Error(`Статистика (${rawNick}): ${statsError.message}`);
+                    await recalculatePlayerStats(matchedPlayer.id);
+                }
+                totalSaved++;
             }
 
-            // История хранит одну карточку на каждый этап, а не одну карточку на каждого игрока.
-            if (uploadMatchedAnyPlayer) {
-                const historyResult = await ensureHistoryEntryForStage(upload.globalStage, seasonId);
+            // Сохраняем счёт и название врага в карточку истории нужного этапа.
+            // Это сработает и для отдельного скриншота итогового табло без списка игроков.
+            const hasMatchDetails = Boolean(screenshotData.enemy_name)
+                || screenshotData.clan_score !== null
+                || screenshotData.enemy_points !== null;
+            if (uploadMatchedAnyPlayer || hasMatchDetails) {
+                const historyResult = await ensureHistoryEntryForStage(upload.globalStage, seasonId, screenshotData);
                 if (historyResult.created) totalHistoryCreated++;
-                if (historyResult.error) console.error('Не удалось создать этап в истории:', historyResult.error);
+                if (historyResult.updated) totalHistoryUpdated++;
+                if (historyResult.error) throw new Error(`История этапа ${upload.globalStage}: ${historyResult.error}`);
+                if (hasMatchDetails) totalMatchDetailsSaved++;
+            } else if (parsedData.length === 0) {
+                showToast(`На фото для этапа ${upload.globalStage} не найдены данные игроков или счёта матча`, 'info');
             }
         } catch (err) {
-            console.error("Ошибка распознавания:", err);
-            showToast('Ошибка ИИ: ' + err.message, 'error');
+            totalErrors++;
+            console.error('Ошибка обработки фотографии:', err);
+            showToast('Ошибка обработки фото: ' + err.message, 'error');
         }
     }
 
-    if (totalRecognized > 0) {
-        showToast(`ИИ прочитал ${totalRecognized} игроков. Засчитано ${totalSaved}. Новых этапов в истории: ${totalHistoryCreated}.`, 'success');
+    if (totalRecognized > 0 || totalSaved > 0 || totalMatchDetailsSaved > 0) {
+        showToast(`Игроков распознано: ${totalRecognized}; сохранено: ${totalSaved}; данные счёта/врага: ${totalMatchDetailsSaved}; новых этапов истории: ${totalHistoryCreated}; обновлено этапов: ${totalHistoryUpdated}.`, totalErrors ? 'info' : 'success');
     } else {
-        showToast(`ИИ не смог распознать данные.`, 'error');
+        showToast('Не удалось распознать данные на фотографиях. Проверь качество снимков.', 'error');
     }
-    
-    if (document.getElementById('tab-attendance')?.classList.contains('active')) {
-        await loadAttendance();
-    }
-    if (document.getElementById('tab-stats')?.classList.contains('active')) {
-        await loadMatchStats();
-    }
-    if (document.getElementById('tab-history')?.classList.contains('active')) {
-        await loadMatchHistory();
-    }
+
+    if (document.getElementById('tab-attendance')?.classList.contains('active')) await loadAttendance();
+    if (document.getElementById('tab-stats')?.classList.contains('active')) await loadMatchStats();
+    if (document.getElementById('tab-history')?.classList.contains('active')) await loadMatchHistory();
 }
 
 function saveAbsentStatuses() {
