@@ -105,6 +105,9 @@
         
         .admin-tab.tab-btn { display: none !important; }
         body.is-admin .admin-tab.tab-btn { display: inline-block !important; }
+        .admin-only { display: none !important; }
+        body.is-admin .admin-only { display: flex !important; }
+        
         .missed-select { padding: 4px; border-radius: var(--radius); background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); font-size: 0.85em; font-family: 'Courier New', monospace; }
         .modal-overlay { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(5px); animation: fadeIn 0.2s; }
         .modal-content { background: var(--panel-bg); padding: 25px; border-radius: var(--radius); width: 100%; max-width: 500px; border: 1px solid var(--accent-color); box-shadow: 0 0 30px rgba(255, 152, 0, 0.2); }
@@ -162,7 +165,7 @@
                     </select>
                 </div>
 
-                <div class="admin-only" style="display:none; gap:5px; flex-wrap:wrap;">
+                <div class="admin-only" style="gap:5px; flex-wrap:wrap;">
                     <button class="btn" onclick="exportBackup()" style="background:#5865F2; color:#fff; font-size:0.75em;" title="Скачать JSON">💾 Скачать</button>
                     <button class="btn" onclick="restoreFromDB()" style="background:#e67e22; color:#fff; font-size:0.75em;" title="Восстановить из БД">📂 Из БД</button>
                     <button class="btn" onclick="document.getElementById('import-backup').click()" style="background:#9b59b6; color:#fff; font-size:0.75em;" title="Загрузить файл">⬆️ Файл</button>
@@ -211,6 +214,19 @@
                         <div><span style="color:var(--text-muted);">КДА:</span> <strong id="my-kda">0</strong></div>
                         <div><span style="color:var(--text-muted);">Очки:</span> <strong id="my-points">0</strong></div>
                         <div><span style="color:var(--text-muted);">Отряд:</span> <strong id="my-squad">-</strong></div>
+                        <div><span style="color:var(--text-muted);">Статус:</span> <strong id="my-status">-</strong></div>
+                    </div>
+                </div>
+
+                <div class="analytics-card" style="margin-bottom:20px;">
+                    <h3 style="color:var(--success-color); text-align:center; margin-top:0; text-transform: uppercase;">Моя посещаемость</h3>
+                    <div id="my-attendance-table" style="overflow-x: auto; margin-top: 15px;"></div>
+                </div>
+
+                <div class="analytics-card">
+                    <h3 style="color:#9cdcfe; text-align:center; margin-top:0; text-transform: uppercase;">Ближайшие турниры</h3>
+                    <div id="my-upcoming-events" style="margin-top: 15px; font-family: 'Courier New', monospace; font-size: 0.9em;">
+                        Загрузка...
                     </div>
                 </div>
             </div>
@@ -304,8 +320,8 @@
                 <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Состав клана</h2>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn admin-only" onclick="openSquadNamesModal()" style="background:var(--accent-color); color:#000;">⚙️ Названия</button>
-                    <button class="btn btn-danger" onclick="clearAllSquads()" id="btn-clear-roster">Очистить</button>
-                    <button class="btn" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
+                    <button class="btn btn-danger admin-only" onclick="clearAllSquads()" id="btn-clear-roster">Очистить</button>
+                    <button class="btn admin-only" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
                 </div>
             </div>
             <div class="roster-layout">
@@ -379,7 +395,7 @@
                 </label>
             </div>
             
-            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--border-color); display:none;">
+            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--border-color);">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">Запланировать</h3>
                 <div class="form-grid-3">
                     <div class="form-group"><label>Дата</label><input type="date" id="cal-date"></div>
@@ -393,7 +409,7 @@
                 <button class="btn" onclick="addUpcomingMatch()" style="margin-top:10px;">Добавить</button>
             </div>
 
-            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--accent-color); display:none;">
+            <div class="admin-only" style="background:var(--card-bg); padding:20px; border-radius:var(--radius); margin-bottom:20px; border:1px solid var(--accent-color);">
                 <h3 style="color:var(--accent-color); margin-top:0; text-transform:uppercase;">⚡ Массовое заполнение</h3>
                 <div class="form-grid-2">
                     <div class="form-group"><label>Начало</label><input type="date" id="bulk-start"></div>
@@ -472,7 +488,7 @@
             <div class="stage-header">
                 <h2 style="text-align:center; color:var(--accent-color); margin:0; text-transform: uppercase;">Аналитика</h2>
                 <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
-                    <button class="btn" onclick="sendAnalyticsScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
+                    <button class="btn admin-only" onclick="sendAnalyticsScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
                 </div>
             </div>
             
@@ -543,8 +559,9 @@
     
     <div id="absent-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="max-height: 80vh; display:flex; flex-direction:column;">
-            <h3 style="text-align:center; color:var(--danger-color); margin-top:0; text-transform: uppercase;">Отсутствующие</h3>
-            <div id="absent-players-list" style="flex:1; overflow-y:auto; margin-bottom:20px;"></div>
+            <h3 style="text-align:center; color:var(--danger-color); margin-top:0; text-transform: uppercase;">Отсутствующие на фото</h3>
+            <p style="text-align:center; color:var(--text-muted); font-size:0.8em; margin-bottom:10px;">Выберите статус для тех, кого ИИ не нашел на скриншоте</p>
+            <div id="absent-players-list" style="flex:1; overflow-y:auto; margin-bottom:20px; background: var(--bg-color); padding: 10px; border-radius: var(--radius); border: 1px solid var(--border-color);"></div>
             <button class="btn" style="width:100%; margin-bottom:10px;" id="save-absent-btn" onclick="saveAbsentStatuses()">ПОДТВЕРДИТЬ</button>
             <button class="btn btn-danger" style="width:100%;" onclick="document.getElementById('absent-modal').style.display='none'">ОТМЕНА</button>
         </div>
