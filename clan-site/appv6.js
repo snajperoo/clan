@@ -1,7 +1,6 @@
 const SUPABASE_URL = 'https://rpqiapddvlkdecddczqx.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz'; 
 
-// 🛡️ КЛЮЧ РАЗБИТ НА 3 ЧАСТИ, ЧТОБЫ GITHUB НЕ БЛОКИРОВАЛ КОММИТ
 const PART_1 = 'AQ.Ab8RN6LJ4zWy';
 const PART_2 = 'EQsJbW4tHmCyTgWJL';
 const PART_3 = 'qCPU8XdtJfeezgwfNsUZQ';
@@ -35,7 +34,6 @@ let SQUADS_CONFIG = [
     { name: '6 Отряд ралики', roles: ['Командир отряда', 'Зам. командира отряда', 'Боец 1', 'Боец 2', 'Боец 3', 'Запас'] }
 ];
 
-// ⚡ ОБНОВЛЕНО: D начинается с 1250
 const TIER_SETTINGS = [
     { name: 'E', minRating: 0, winGears: 1250, lossGears: 500 },
     { name: 'D', minRating: 1250, winGears: 1750, lossGears: 500 },
@@ -669,8 +667,17 @@ async function loadMyProfile(player) {
         matches.forEach(match => {
             const cScore = match.clan_score || 0, eScore = match.enemy_points || 0;
             const currentTier = getTierData(totalRating);
-            if (cScore > eScore) { totalGears += currentTier.winGears; totalRating += 50; }
-            else if (cScore < eScore) { if (cScore >= (eScore * 0.2)) totalGears += currentTier.lossGears; totalRating -= 50; }
+            let gears = match.gears_earned !== null && match.gears_earned !== undefined ? match.gears_earned : 0;
+            
+            if (match.gears_earned === null || match.gears_earned === undefined) {
+                if (cScore > eScore) gears = currentTier.winGears;
+                else if (cScore < eScore && cScore >= (eScore * 0.2)) gears = currentTier.lossGears;
+            }
+            
+            if (cScore > eScore) { totalRating += 50; }
+            else if (cScore < eScore) { totalRating -= 50; }
+            
+            totalGears += gears;
         });
     }
     document.getElementById('my-gears').innerText = totalGears;
@@ -1100,6 +1107,10 @@ async function loadMatchHistory() {
             winText = 'НИЧЬЯ'; 
         }
 
+        if (match.gears_earned !== null && match.gears_earned !== undefined) {
+            gearsEarned = match.gears_earned;
+        }
+
         const safeOpponent = escapeHtml(match.enemy_name || '');
         const safeMapName = escapeHtml(match.map_name || '');
         const adminEdit = isAdmin ? `
@@ -1118,6 +1129,10 @@ async function loadMatchHistory() {
                     <input type="number" min="0" step="1" value="${cScore}" onchange="updateMatchData(${match.id}, 'clan_score', this.value)" placeholder="STALZONE" title="Очки STALZONE" style="min-width:0; flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px; font-size:0.85em;">
                     <input type="number" min="0" step="1" value="${eScore}" onchange="updateMatchData(${match.id}, 'enemy_points', this.value)" placeholder="Враг" title="Очки противника" style="min-width:0; flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px; font-size:0.85em;">
                 </div>
+
+                <label style="font-size:0.72em; color:var(--text-muted); font-weight:bold;">ГИЛЬЗЫ (ОСТАВЬТЕ ПУСТЫМ ДЛЯ АВТО)</label>
+                <input type="number" value="${match.gears_earned !== null ? match.gears_earned : ''}" onchange="updateMatchData(${match.id}, 'gears_earned', this.value)" placeholder="Авто: ${gearsEarned}" style="background:var(--input-bg); color:#9cdcfe; border:1px solid var(--border-color); padding:7px; border-radius:4px; font-size:0.85em; font-weight:bold;">
+
                 <button class="btn btn-danger" style="padding: 5px; font-size: 0.75em;" onclick="deleteMatch(${match.id})">Удалить матч</button>
             </div>
         ` : '';
@@ -1163,17 +1178,22 @@ function escapeHtml(value) {
 
 async function updateMatchData(id, field, value) {
     if (!isAdmin) return;
-    const allowedFields = ['match_date', 'enemy_name', 'map_name', 'clan_score', 'enemy_points'];
+    const allowedFields = ['match_date', 'enemy_name', 'map_name', 'clan_score', 'enemy_points', 'gears_earned'];
     if (!allowedFields.includes(field)) {
         showToast('Это поле нельзя редактировать', 'error');
         return;
     }
 
     let val = value;
-    if (field === 'clan_score' || field === 'enemy_points') {
-        val = value === '' ? 0 : Number(value);
-        if (!Number.isInteger(val) || val < 0) {
+    if (field === 'clan_score' || field === 'enemy_points' || field === 'gears_earned') {
+        val = value === '' ? null : Number(value);
+        if (field !== 'gears_earned' && (!Number.isInteger(val) || val < 0)) {
             showToast('Счёт должен быть целым числом не меньше нуля', 'error');
+            loadMatchHistory();
+            return;
+        }
+        if (field === 'gears_earned' && val !== null && (!Number.isInteger(val) || val < 0)) {
+            showToast('Гильзы должны быть целым числом не меньше нуля', 'error');
             loadMatchHistory();
             return;
         }
@@ -1188,7 +1208,7 @@ async function updateMatchData(id, field, value) {
         return;
     }
 
-    showToast(field === 'enemy_name' ? 'Название вражеского клана сохранено' : field === 'map_name' ? 'Название карты сохранено' : 'Изменения сохранены', 'success');
+    showToast('Изменения сохранены', 'success');
     await loadMatchHistory();
 }
 
