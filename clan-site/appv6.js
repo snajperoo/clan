@@ -1523,12 +1523,10 @@ async function confirmPhotoUpload() {
 
     for (const upload of uploads) {
         try {
-            // Сжимаем фото перед отправкой (максимум 1200px по ширине/высоте)
             const base64Data = await compressImage(upload.file);
             
-            // Функция для отправки запроса с повторными попытками, тайм-аутом и сменой модели
-            const fetchWithRetry = async (retries = 4, timeoutMs = 15000) => {
-                const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite']; 
+            const fetchWithRetry = async (retries = 3, timeoutMs = 15000) => {
+                const models = ['gemini-3.5-flash', 'gemini-3.5-flash-lite']; 
                 
                 for (let i = 0; i < retries; i++) {
                     const currentModel = models[i % models.length]; 
@@ -1536,7 +1534,7 @@ async function confirmPhotoUpload() {
                     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
                     try {
-                        console.log(`[Попытка ${i + 1}/${retries}] Модель: ${currentModel}, Тайм-аут: ${timeoutMs/1000}с`);
+                        console.log(`[Попытка ${i + 1}/${retries}] Модель: ${currentModel}`);
                         
                         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`, {
                             method: 'POST',
@@ -1555,24 +1553,18 @@ async function confirmPhotoUpload() {
                         clearTimeout(timeoutId);
                         const resData = await response.json();
                         
-                        // Если сервер перегружен (503), кидаем ошибку для повторной попытки
-                        if (resData.error && resData.error.code === 503) {
-                            throw new Error('503');
-                        }
-                        if (resData.error) {
-                            throw new Error(resData.error.message);
-                        }
+                        if (resData.error && resData.error.code === 503) throw new Error('503');
+                        if (resData.error) throw new Error(resData.error.message);
 
-                        return resData; // Успешный ответ
+                        return resData; 
                     } catch (err) {
                         clearTimeout(timeoutId);
                         const isTimeout = err.name === 'AbortError';
                         if (i === retries - 1) throw err; 
                         
                         console.warn(`Попытка ${i + 1} не удалась (${isTimeout ? 'Тайм-аут' : err.message}). Повтор...`);
-                        showToast(`Google завис или перегружен. Ждем ${timeoutMs/1000} сек...`, 'info');
-                        await new Promise(resolve => setTimeout(resolve, timeoutMs)); 
-                        timeoutMs += 5000; // Увеличиваем тайм-аут (15с -> 20с -> 25с)
+                        showToast(`Сервер Google завис или перегружен. Ждем...`, 'info');
+                        await new Promise(resolve => setTimeout(resolve, 3000)); 
                     }
                 }
             };
@@ -1580,19 +1572,33 @@ async function confirmPhotoUpload() {
             const resData = await fetchWithRetry();
 
             let textResponse = resData.candidates[0].content.parts[0].text;
-            textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-            
+            console.log("Сырой ответ ИИ:", textResponse);
+
+            const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                textResponse = jsonMatch[0];
+            }
+
             let foundNicks = [];
             try {
                 foundNicks = JSON.parse(textResponse);
             } catch(e) {
-                console.warn("ИИ вернул не JSON:", textResponse);
+                console.error("Ошибка парсинга JSON. Ответ ИИ:", textResponse);
+                showToast(`ИИ не смог распознать ники на фото (Турнир ${Math.ceil(upload.globalStage / 3)}).`, 'error');
                 continue; 
             }
 
-            if (!Array.isArray(foundNicks)) continue;
-            totalRecognized += foundNicks.length;
+            if (!Array.isArray(foundNicks)) {
+                showToast('ИИ вернул не массив данных.', 'error');
+                continue;
+            }
 
+            if (foundNicks.length === 0) {
+                showToast(`ИИ не нашел ников на фото для Этапа ${upload.globalStage}.`, 'info');
+                continue;
+            }
+
+            totalRecognized += foundNicks.length;
             const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
             
             for (const rawNick of foundNicks) {
@@ -1614,7 +1620,11 @@ async function confirmPhotoUpload() {
         }
     }
 
-    showToast(`ИИ прочитал ${totalRecognized} ников. Засчитано ${totalSaved} игроков!`, 'success');
+    if (totalRecognized > 0) {
+        showToast(`ИИ прочитал ${totalRecognized} ников. Засчитано ${totalSaved} игроков!`, 'success');
+    } else {
+        showToast(`ИИ не смог распознать ни одного ника.`, 'error');
+    }
     
     if (document.getElementById('tab-attendance').classList.contains('active')) {
         loadAttendance();
