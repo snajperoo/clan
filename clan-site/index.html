@@ -213,6 +213,7 @@
                         <div><span style="color:var(--text-muted);">КД:</span> <strong id="my-kd">0</strong></div>
                         <div><span style="color:var(--text-muted);">КДА:</span> <strong id="my-kda">0</strong></div>
                         <div><span style="color:var(--text-muted);">Очки:</span> <strong id="my-points">0</strong></div>
+                        <div><span style="color:var(--text-muted);">Гильзы:</span> <strong id="my-gears" style="color:#9cdcfe;">0</strong></div>
                         <div><span style="color:var(--text-muted);">Отряд:</span> <strong id="my-squad">-</strong></div>
                         <div><span style="color:var(--text-muted);">Статус:</span> <strong id="my-status">-</strong></div>
                     </div>
@@ -221,13 +222,6 @@
                 <div class="analytics-card" style="margin-bottom:20px;">
                     <h3 style="color:var(--success-color); text-align:center; margin-top:0; text-transform: uppercase;">Моя посещаемость</h3>
                     <div id="my-attendance-table" style="overflow-x: auto; margin-top: 15px;"></div>
-                </div>
-
-                <div class="analytics-card">
-                    <h3 style="color:#9cdcfe; text-align:center; margin-top:0; text-transform: uppercase;">Ближайшие турниры</h3>
-                    <div id="my-upcoming-events" style="margin-top: 15px; font-family: 'Courier New', monospace; font-size: 0.9em;">
-                        Загрузка...
-                    </div>
                 </div>
             </div>
         </div>
@@ -318,10 +312,10 @@
         <div id="tab-roster" class="tab-content">
             <div class="stage-header">
                 <h2 style="color:var(--accent-color); margin:0; text-transform: uppercase;">Состав клана</h2>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn admin-only" onclick="openSquadNamesModal()" style="background:var(--accent-color); color:#000;">⚙️ Названия</button>
-                    <button class="btn btn-danger admin-only" onclick="clearAllSquads()" id="btn-clear-roster">Очистить</button>
-                    <button class="btn admin-only" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
+                <div class="admin-only" style="gap: 10px; flex-wrap: wrap;">
+                    <button class="btn" onclick="openSquadNamesModal()" style="background:var(--accent-color); color:#000;">⚙️ Названия</button>
+                    <button class="btn btn-danger" onclick="clearAllSquads()" id="btn-clear-roster">Очистить</button>
+                    <button class="btn" onclick="sendRosterScreenshot()" style="background:#5865F2; color:white;">Опубликовать</button>
                 </div>
             </div>
             <div class="roster-layout">
