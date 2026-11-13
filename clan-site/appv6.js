@@ -1507,22 +1507,45 @@ async function confirmPhotoUpload() {
         try {
             const base64Data = await fileToBase64(upload.file);
             
-            // ⚡ ОБНОВЛЕНО НА АКТУАЛЬНУЮ МОДЕЛЬ gemini-3.8-flash
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: "Проанализируй этот скриншот игры. Найди список ников игроков. Верни ТОЛЬКО массив JSON со списком ников в формате [\"Ник1\", \"Ник2\", ...]. Никакого другого текста, без markdown разметки." },
-                            { inline_data: { mime_type: upload.file.type, data: base64Data } }
-                        ]
-                    }]
-                })
-            });
+            // Функция для отправки запроса с повторными попытками
+            const fetchWithRetry = async (retries = 3, delay = 2000) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{
+                                    parts: [
+                                        { text: "Проанализируй этот скриншот игры. Найди список ников игроков. Верни ТОЛЬКО массив JSON со списком ников в формате [\"Ник1\", \"Ник2\", ...]. Никакого другого текста, без markdown разметки." },
+                                        { inline_data: { mime_type: upload.file.type, data: base64Data } }
+                                    ]
+                                }]
+                            })
+                        });
 
-            const resData = await response.json();
-            if (resData.error) throw new Error(resData.error.message);
+                        const resData = await response.json();
+                        
+                        // Если сервер перегружен (503), кидаем ошибку для повторной попытки
+                        if (resData.error && resData.error.code === 503) {
+                            throw new Error('503');
+                        }
+                        if (resData.error) {
+                            throw new Error(resData.error.message);
+                        }
+
+                        return resData; // Успешный ответ
+                    } catch (err) {
+                        if (i === retries - 1) throw err; // Если это последняя попытка, пробрасываем ошибку дальше
+                        console.warn(`Попытка ${i + 1} не удалась. Повтор через ${delay / 1000} сек...`, err.message);
+                        showToast(`Сервер Google перегружен. Повторная попытка ${i + 1}/${retries}...`, 'info');
+                        await new Promise(resolve => setTimeout(resolve, delay)); // Ждем
+                        delay *= 2; // Увеличиваем задержку (2 сек, 4 сек, 8 сек)
+                    }
+                }
+            };
+
+            const resData = await fetchWithRetry();
 
             let textResponse = resData.candidates[0].content.parts[0].text;
             textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
