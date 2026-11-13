@@ -699,6 +699,23 @@ async function loadMyProfile(player) {
     statusEl.innerText = player.status || 'в клане';
     statusEl.style.color = player.status === 'кикнут' ? 'var(--danger-color)' : (player.status === 'в обработке' ? 'var(--accent-color)' : 'var(--success-color)');
 
+    // Гильзы
+    let qMatches = supabaseClient.from('clan_matches').select('*').order('stage_number', { ascending: true, nullsFirst: false });
+    qMatches = filterBySeason(qMatches);
+    const { data: matches } = await qMatches;
+    
+    let totalGears = 0;
+    let totalRating = 1000;
+    if (matches) {
+        matches.forEach(match => {
+            const cScore = match.clan_score || 0, eScore = match.enemy_points || 0;
+            const currentTier = getTierData(totalRating);
+            if (cScore > eScore) { totalGears += currentTier.winGears; totalRating += 50; }
+            else if (cScore < eScore) { if (cScore >= (eScore * 0.2)) totalGears += currentTier.lossGears; totalRating -= 50; }
+        });
+    }
+    document.getElementById('my-gears').innerText = totalGears;
+
     // Таблица посещаемости
     const attContainer = document.getElementById('my-attendance-table');
     let q = supabaseClient.from('attendance').select('*').eq('player_id', player.id);
@@ -720,23 +737,6 @@ async function loadMyProfile(player) {
     }
     html += '</tbody></table>';
     attContainer.innerHTML = att && att.length > 0 ? html : '<div style="color:var(--text-muted); text-align:center; padding:10px;">Нет данных о посещаемости</div>';
-
-    // Ближайшие турниры
-    const evContainer = document.getElementById('my-upcoming-events');
-    let qEv = supabaseClient.from('clan_calendar').select('*').gte('match_date', new Date().toISOString().split('T')[0]).order('match_date', { ascending: true }).limit(3);
-    qEv = filterBySeason(qEv);
-    const { data: events } = await qEv;
-    
-    if (events && events.length > 0) {
-        evContainer.innerHTML = events.map(e => `
-            <div style="padding: 8px; border-bottom: 1px solid var(--border-color);">
-                <span style="color:var(--accent-color); font-weight:bold;">${new Date(e.match_date).toLocaleDateString('ru-RU')}</span> в ${e.match_time ? e.match_time.slice(0,5) : '--:--'}
-                <span style="float:right; color:var(--text-muted);">Турнир ${e.tournament_number || '-'}</span>
-            </div>
-        `).join('');
-    } else {
-        evContainer.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:10px;">Нет предстоящих турниров</div>';
-    }
 }
 
 // ==================== РАБОТА С СОСТАВОМ ====================
@@ -1662,8 +1662,8 @@ async function confirmPhotoUpload() {
     showToast(`Сжатие и отправка ${uploads.length} фото в ИИ...`, 'info');
     closePhotoModal();
 
-    pendingMatchedPlayers = []; // Сбрасываем перед новым
-    pendingAbsentPlayers = []; // Сбрасываем перед новым
+    pendingMatchedPlayers = [];
+    pendingAbsentPlayers = [];
     let currentUploadStage = null;
     let currentSeasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
 
@@ -1709,7 +1709,6 @@ async function confirmPhotoUpload() {
             const resData = await fetchWithRetry();
             const textResponse = resData?.candidates?.[0]?.content?.parts?.map(part => part.text || '').filter(Boolean).join('\n') || '';
             
-            // Парсим массив ников (простой парсер)
             let foundNicks = [];
             try {
                 const clean = textResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -1726,9 +1725,8 @@ async function confirmPhotoUpload() {
             }
 
             currentUploadStage = upload.globalStage;
-            
-            // Находим совпадения
             const matchedIds = new Set();
+            
             foundNicks.forEach(rawNick => {
                 const match = findBestPlayerMatch(rawNick, activePlayers);
                 if (match && !matchedIds.has(match.id)) {
@@ -1737,11 +1735,9 @@ async function confirmPhotoUpload() {
                 }
             });
 
-            // Находим отсутствующих
             const absent = activePlayers.filter(p => !matchedIds.has(p.id));
             
             absent.forEach(p => {
-                // Проверяем, есть ли уже запись для этого этапа
                 const existing = allAttendance.find(a => a.player_id === p.id && a.tournament_number === upload.globalStage);
                 pendingAbsentPlayers.push({
                     id: p.id,
@@ -1756,7 +1752,6 @@ async function confirmPhotoUpload() {
         }
     }
 
-    // Сохраняем "Пришедших" сразу
     if (pendingMatchedPlayers.length > 0 && currentUploadStage) {
         for (const p of pendingMatchedPlayers) {
             await supabaseClient.from('attendance').upsert({
@@ -1766,7 +1761,6 @@ async function confirmPhotoUpload() {
         showToast(`Распознано и отмечено как "Пришел": ${pendingMatchedPlayers.length}`, 'success');
     }
 
-    // Если есть отсутствующие, открываем модалку
     if (pendingAbsentPlayers.length > 0) {
         currentAbsentStage = currentUploadStage;
         pendingSeasonId = currentSeasonId;
@@ -1822,7 +1816,6 @@ async function saveAbsentStatuses() {
     document.getElementById('absent-modal').style.display = 'none';
     showToast(`Статусы для отсутствующих сохранены (${updated})`, 'success');
     
-    // Сбрасываем массивы
     pendingAbsentPlayers = [];
     pendingMatchedPlayers = [];
     currentAbsentStage = null;
@@ -1830,11 +1823,6 @@ async function saveAbsentStatuses() {
     loadAttendance();
     loadMatchStats();
     if (document.getElementById('tab-history').classList.contains('active')) loadMatchHistory();
-}
-
-function saveAbsentStatuses_Old() {
-    document.getElementById('absent-modal').style.display = 'none';
-    showToast('Сохранено', 'success');
 }
 
 // ==================== INIT ====================
