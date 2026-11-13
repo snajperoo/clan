@@ -1069,7 +1069,9 @@ async function loadMatchHistory() {
     const timeline = document.getElementById('history-timeline'); if (!timeline) return;
     timeline.innerHTML = '<div style="text-align:center; width:100%;">Загрузка...</div>';
 
-    let q = supabaseClient.from('clan_matches').select('*').order('match_date', { ascending: true });
+    let q = supabaseClient.from('clan_matches').select('*')
+        .order('stage_number', { ascending: true, nullsFirst: false })
+        .order('match_date', { ascending: true });
     q = filterBySeason(q);
     const { data: matches } = await q;
     
@@ -1102,10 +1104,17 @@ async function loadMatchHistory() {
     updateHistoryStats(totalRating, finalTier.name, totalGears, wins, losses, draws);
 
     timeline.innerHTML = '';
-    const reversedMatches = [...matches].reverse(); 
+    // Показываем матчи в естественной последовательности: сначала ранние даты,
+    // а внутри одной даты — этапы 1, 2, 3 ... по возрастанию номера.
+    const orderedMatches = [...matches].sort((a, b) => {
+        const stageA = Number.isFinite(Number(a.stage_number)) && a.stage_number !== null ? Number(a.stage_number) : Number.MAX_SAFE_INTEGER;
+        const stageB = Number.isFinite(Number(b.stage_number)) && b.stage_number !== null ? Number(b.stage_number) : Number.MAX_SAFE_INTEGER;
+        if (stageA !== stageB) return stageA - stageB;
+        return String(a.match_date || '').localeCompare(String(b.match_date || ''));
+    });
     let currentCalcRating = 1000;
     
-    reversedMatches.forEach((match) => {
+    orderedMatches.forEach((match) => {
         const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('ru-RU') : 'Дата не указана';
         const cScore = match.clan_score || 0, eScore = match.enemy_points || 0;
         const opponent = match.enemy_name || 'Неизвестный враг', mapName = match.map_name || 'Не указана';
@@ -1122,30 +1131,34 @@ async function loadMatchHistory() {
             winText = 'НИЧЬЯ'; 
         }
 
+        const safeOpponent = escapeHtml(match.enemy_name || '');
+        const safeMapName = escapeHtml(match.map_name || '');
         const adminEdit = isAdmin ? `
-            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 5px;">
-                <input type="date" value="${match.match_date || ''}" onchange="updateMatchData(${match.id}, 'date', this.value)" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:4px; border-radius:4px; font-size:0.8em;">
-                <input type="text" value="${opponent}" onchange="updateMatchData(${match.id}, 'enemy_name', this.value)" placeholder="Враг" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:4px; border-radius:4px; font-size:0.8em;">
-                <select onchange="updateMatchData(${match.id}, 'map_name', this.value)" style="background:var(--input-bg); color:#ff9800; border:1px solid var(--border-color); padding:4px; border-radius:4px; font-size:0.8em; font-weight:bold;">
-                    <option value="">-- Карта --</option>
-                    <option value="Низина" ${match.map_name === 'Низина' ? 'selected' : ''}>Низина</option>
-                    <option value="Малая Бердовка" ${match.map_name === 'Малая Бердовка' ? 'selected' : ''}>Малая Бердовка</option>
-                    <option value="Хвойный" ${match.map_name === 'Хвойный' ? 'selected' : ''}>Хвойный</option>
-                </select>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 7px;">
+                <label style="font-size:0.72em; color:var(--text-muted); font-weight:bold;">ДАТА МАТЧА</label>
+                <input type="date" value="${match.match_date || ''}" onchange="updateMatchData(${match.id}, 'match_date', this.value)" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px; font-size:0.85em;">
+
+                <label style="font-size:0.72em; color:var(--text-muted); font-weight:bold;">НАЗВАНИЕ ВРАЖЕСКОГО КЛАНА</label>
+                <input type="text" value="${safeOpponent}" onchange="updateMatchData(${match.id}, 'enemy_name', this.value)" placeholder="Например: Enemy Clan" style="background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:7px; border-radius:4px; font-size:0.85em;">
+
+                <label style="font-size:0.72em; color:var(--text-muted); font-weight:bold;">КАРТА</label>
+                <input type="text" value="${safeMapName}" onchange="updateMatchData(${match.id}, 'map_name', this.value)" placeholder="Введите название карты" style="background:var(--input-bg); color:#ff9800; border:1px solid var(--border-color); padding:7px; border-radius:4px; font-size:0.85em; font-weight:bold;">
+
+                <label style="font-size:0.72em; color:var(--text-muted); font-weight:bold;">СЧЁТ МАТЧА</label>
                 <div style="display:flex; gap:5px;">
-                    <input type="number" value="${cScore}" onchange="updateMatchData(${match.id}, 'clan_score', this.value)" placeholder="Мы" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:4px; border-radius:4px; font-size:0.8em;">
-                    <input type="number" value="${eScore}" onchange="updateMatchData(${match.id}, 'enemy_points', this.value)" placeholder="Враг" style="flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:4px; border-radius:4px; font-size:0.8em;">
+                    <input type="number" min="0" step="1" value="${cScore}" onchange="updateMatchData(${match.id}, 'clan_score', this.value)" placeholder="STALZONE" title="Очки STALZONE" style="min-width:0; flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px; font-size:0.85em;">
+                    <input type="number" min="0" step="1" value="${eScore}" onchange="updateMatchData(${match.id}, 'enemy_points', this.value)" placeholder="Враг" title="Очки противника" style="min-width:0; flex:1; background:var(--input-bg); color:var(--text-color); border:1px solid var(--border-color); padding:6px; border-radius:4px; font-size:0.85em;">
                 </div>
-                <button class="btn btn-danger" style="padding: 4px; font-size: 0.75em;" onclick="deleteMatch(${match.id})">Удалить</button>
+                <button class="btn btn-danger" style="padding: 5px; font-size: 0.75em;" onclick="deleteMatch(${match.id})">Удалить матч</button>
             </div>
         ` : '';
 
         timeline.innerHTML += `
             <div class="history-card ${scoreClass}">
                 <div style="font-size:0.8em; color:var(--accent-color);">Этап ${match.stage_number || '-'}</div>
-                <div style="font-size:0.85em; color:#9cdcfe;">🗺️ ${mapName}</div>
+                <div style="font-size:0.85em; color:#9cdcfe;">🗺️ ${escapeHtml(mapName)}</div>
                 <div style="font-size:0.8em; color:var(--text-muted);">${dateStr}</div>
-                <div style="font-size:0.95em; font-weight:bold; margin-top:5px;">vs ${opponent}</div>
+                <div style="font-size:0.95em; font-weight:bold; margin-top:5px;">vs ${escapeHtml(opponent)}</div>
                 <div style="font-size:1.4em; font-weight:bold; font-family:'Courier New', monospace;" class="${scoreClass === 'win' ? 'score-win' : (scoreClass === 'loss' ? 'score-loss' : '')}">${cScore} : ${eScore}</div>
                 <div style="font-size:0.85em; color:var(--text-muted);">${winText}</div>
                 ${gearsEarned > 0 ? `<div style="font-size:0.85em; color:#9cdcfe; font-weight:bold;">+${gearsEarned} гильз</div>` : ''}
@@ -1173,11 +1186,43 @@ async function addMatchHistory() {
     showToast('Добавлен', 'success'); loadMatchHistory();
 }
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+}
+
 async function updateMatchData(id, field, value) {
     if (!isAdmin) return;
-    let val = value; if (field === 'clan_score' || field === 'enemy_points') val = parseInt(value) || 0;
-    await supabaseClient.from('clan_matches').update({ [field]: val }).eq('id', id);
-    loadMatchHistory();
+
+    const allowedFields = ['match_date', 'enemy_name', 'map_name', 'clan_score', 'enemy_points'];
+    if (!allowedFields.includes(field)) {
+        showToast('Это поле нельзя редактировать', 'error');
+        return;
+    }
+
+    let val = value;
+    if (field === 'clan_score' || field === 'enemy_points') {
+        val = value === '' ? 0 : Number(value);
+        if (!Number.isInteger(val) || val < 0) {
+            showToast('Счёт должен быть целым числом не меньше нуля', 'error');
+            loadMatchHistory();
+            return;
+        }
+    } else if (field === 'enemy_name' || field === 'map_name') {
+        val = String(value || '').trim();
+    }
+
+    const { error } = await supabaseClient.from('clan_matches').update({ [field]: val }).eq('id', id);
+    if (error) {
+        console.error('Не удалось сохранить матч:', error);
+        showToast('Не удалось сохранить: ' + error.message, 'error');
+        return;
+    }
+
+    showToast(field === 'enemy_name' ? 'Название вражеского клана сохранено' :
+        field === 'map_name' ? 'Название карты сохранено' : 'Изменения сохранены', 'success');
+    await loadMatchHistory();
 }
 
 async function deleteMatch(id) {
