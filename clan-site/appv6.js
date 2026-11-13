@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://rpqiapddvlkdecddczqx.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz'; 
 // ТВОЙ КЛЮЧ (ВНИМАНИЕ: ОН НЕ БУДЕТ РАБОТАТЬ ИЗ-ЗА ФОРМАТА AQ...)
-const GEMINI_API_KEY = 'AQ.Ab8RN6IdO4AWRFat5cUf4ZitQBbp2O8_kLgBcI13ej-6QqoUAw'; 
+const GEMINI_API_KEY = 'AQ.Ab8RN6I2v0fSapF9956tgUVWh2H537wEX4RQpo83lZsvVZWBGQ'; 
 
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
