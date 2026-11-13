@@ -1507,11 +1507,16 @@ async function confirmPhotoUpload() {
         try {
             const base64Data = await fileToBase64(upload.file);
             
-            // Функция для отправки запроса с повторными попытками
-            const fetchWithRetry = async (retries = 3, delay = 2000) => {
+            // Функция для отправки запроса с повторными попытками и сменой модели
+            const fetchWithRetry = async (retries = 4, delay = 2000) => {
+                const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite']; // Список моделей для fallback
+                
                 for (let i = 0; i < retries; i++) {
+                    const currentModel = models[i % models.length]; // Чередуем модели
                     try {
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                        console.log(`[Попытка ${i + 1}/${retries}] Используем модель: ${currentModel}`);
+                        
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1537,7 +1542,7 @@ async function confirmPhotoUpload() {
                         return resData; // Успешный ответ
                     } catch (err) {
                         if (i === retries - 1) throw err; // Если это последняя попытка, пробрасываем ошибку дальше
-                        console.warn(`Попытка ${i + 1} не удалась. Повтор через ${delay / 1000} сек...`, err.message);
+                        console.warn(`Попытка ${i + 1} не удалась (${currentModel}). Повтор через ${delay / 1000} сек...`, err.message);
                         showToast(`Сервер Google перегружен. Повторная попытка ${i + 1}/${retries}...`, 'info');
                         await new Promise(resolve => setTimeout(resolve, delay)); // Ждем
                         delay *= 2; // Увеличиваем задержку (2 сек, 4 сек, 8 сек)
@@ -1598,7 +1603,6 @@ function saveAbsentStatuses() {
 async function init() {
     await loadSeasons();
     await loadAllData();
-    setupRealtimeSync();
     await checkAndBackupIfStale();
 }
 
