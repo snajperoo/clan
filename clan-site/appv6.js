@@ -1360,12 +1360,30 @@ async function deletePlayerNote(noteId, playerId) {
 async function sendAnalyticsScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 async function sendRosterScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 
-function fileToBase64(file) {
+// ==================== СЖАТИЕ И РАСПОЗНАВАНИЕ ФОТО ====================
+
+function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = error => reject(error);
+        reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) { height = Math.round(height * (maxWidth / width)); width = maxWidth; }
+                if (height > maxHeight) { width = Math.round(width * (maxHeight / height)); height = maxHeight; }
+                const canvas = document.createElement('canvas');
+                canvas.width = width; canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(dataUrl.split(',')[1]); // Return base64 part
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
     });
 }
 
@@ -1497,7 +1515,7 @@ async function confirmPhotoUpload() {
         }
     });
 
-    showToast(`ИИ обрабатывает ${uploads.length} фото...`, 'info');
+    showToast(`Сжатие и отправка ${uploads.length} фото в ИИ...`, 'info');
     closePhotoModal();
 
     let totalRecognized = 0;
@@ -1505,30 +1523,36 @@ async function confirmPhotoUpload() {
 
     for (const upload of uploads) {
         try {
-            const base64Data = await fileToBase64(upload.file);
+            // Сжимаем фото перед отправкой (максимум 1200px по ширине/высоте)
+            const base64Data = await compressImage(upload.file);
             
-            // Функция для отправки запроса с повторными попытками и сменой модели
-            const fetchWithRetry = async (retries = 4, delay = 2000) => {
-                const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite']; // Актуальные ID моделей Gemini 3
+            // Функция для отправки запроса с повторными попытками, тайм-аутом и сменой модели
+            const fetchWithRetry = async (retries = 4, timeoutMs = 15000) => {
+                const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite']; 
                 
                 for (let i = 0; i < retries; i++) {
-                    const currentModel = models[i % models.length]; // Чередуем модели
+                    const currentModel = models[i % models.length]; 
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
                     try {
-                        console.log(`[Попытка ${i + 1}/${retries}] Используем модель: ${currentModel}`);
+                        console.log(`[Попытка ${i + 1}/${retries}] Модель: ${currentModel}, Тайм-аут: ${timeoutMs/1000}с`);
                         
                         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
+                            signal: controller.signal,
                             body: JSON.stringify({
                                 contents: [{
                                     parts: [
                                         { text: "Проанализируй этот скриншот игры. Найди список ников игроков. Верни ТОЛЬКО массив JSON со списком ников в формате [\"Ник1\", \"Ник2\", ...]. Никакого другого текста, без markdown разметки." },
-                                        { inline_data: { mime_type: upload.file.type, data: base64Data } }
+                                        { inline_data: { mime_type: 'image/jpeg', data: base64Data } }
                                     ]
                                 }]
                             })
                         });
 
+                        clearTimeout(timeoutId);
                         const resData = await response.json();
                         
                         // Если сервер перегружен (503), кидаем ошибку для повторной попытки
@@ -1541,11 +1565,14 @@ async function confirmPhotoUpload() {
 
                         return resData; // Успешный ответ
                     } catch (err) {
-                        if (i === retries - 1) throw err; // Если это последняя попытка, пробрасываем ошибку дальше
-                        console.warn(`Попытка ${i + 1} не удалась (${currentModel}). Повтор через ${delay / 1000} сек...`, err.message);
-                        showToast(`Сервер Google перегружен. Повторная попытка ${i + 1}/${retries}...`, 'info');
-                        await new Promise(resolve => setTimeout(resolve, delay)); // Ждем
-                        delay *= 2; // Увеличиваем задержку (2 сек, 4 сек, 8 сек)
+                        clearTimeout(timeoutId);
+                        const isTimeout = err.name === 'AbortError';
+                        if (i === retries - 1) throw err; 
+                        
+                        console.warn(`Попытка ${i + 1} не удалась (${isTimeout ? 'Тайм-аут' : err.message}). Повтор...`);
+                        showToast(`Google завис или перегружен. Ждем ${timeoutMs/1000} сек...`, 'info');
+                        await new Promise(resolve => setTimeout(resolve, timeoutMs)); 
+                        timeoutMs += 5000; // Увеличиваем тайм-аут (15с -> 20с -> 25с)
                     }
                 }
             };
@@ -1587,7 +1614,7 @@ async function confirmPhotoUpload() {
         }
     }
 
-    showToast(`ИИ прочитал ${totalRecognized} ников. Успешно засчитано ${totalSaved} игроков!`, 'success');
+    showToast(`ИИ прочитал ${totalRecognized} ников. Засчитано ${totalSaved} игроков!`, 'success');
     
     if (document.getElementById('tab-attendance').classList.contains('active')) {
         loadAttendance();
