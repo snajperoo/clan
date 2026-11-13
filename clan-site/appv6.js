@@ -91,6 +91,29 @@ function findBestPlayerMatch(recognizedNick, playersList) {
     }
     return bestPlayer;
 }
+
+// Железобетонный парсер ответов ИИ
+function extractPlayerData(text) {
+    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    clean = clean.replace(/[\u00A0\u200B]/g, ' '); 
+    
+    try {
+        const parsed = JSON.parse(clean);
+        if (Array.isArray(parsed)) return parsed;
+    } catch(e) {
+        let jsonCompatible = clean.replace(/'/g, '"');
+        try {
+            const parsed = JSON.parse(jsonCompatible);
+            if (Array.isArray(parsed)) return parsed;
+        } catch(e2) {
+            const matches = clean.match(/\[[\s\S]*\]/);
+            if (matches) {
+                try { return JSON.parse(matches[0].replace(/'/g, '"')); } catch(e3) {}
+            }
+        }
+    }
+    return [];
+}
 // =======================================================================
 
 // ==================== БЭКАПЫ ====================
@@ -1543,7 +1566,7 @@ async function confirmPhotoUpload() {
                             body: JSON.stringify({
                                 contents: [{
                                     parts: [
-                                        { text: "Проанализируй этот скриншот игры. Найди список ников игроков. Верни ТОЛЬКО массив JSON со списком ников в формате [\"Ник1\", \"Ник2\", ...]. Никакого другого текста, без markdown разметки." },
+                                        { text: "Проанализируй этот скриншот игры (таблица статистики или посещаемости). Извлеки список игроков. Для каждого игрока найди его никнейм, а также показатели: K (убийства), D (смерти), A (ассисты), PTS (очки). Если на скрине нет цифр (только список ников), то K, D, A, PTS приравняй к 0. Верни ТОЛЬКО валидный JSON-массив объектов в формате: [{\"nickname\": \"Ник1\", \"k\": 10, \"d\": 5, \"a\": 2, \"pts\": 100}, {\"nickname\": \"Ник2\", \"k\": 0, \"d\": 0, \"a\": 0, \"pts\": 0}]. Никакого другого текста, без markdown разметки." },
                                         { inline_data: { mime_type: 'image/jpeg', data: base64Data } }
                                     ]
                                 }]
@@ -1574,43 +1597,47 @@ async function confirmPhotoUpload() {
             let textResponse = resData.candidates[0].content.parts[0].text;
             console.log("Сырой ответ ИИ:", textResponse);
 
-            const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                textResponse = jsonMatch[0];
-            }
+            const parsedData = extractPlayerData(textResponse);
 
-            let foundNicks = [];
-            try {
-                foundNicks = JSON.parse(textResponse);
-            } catch(e) {
-                console.error("Ошибка парсинга JSON. Ответ ИИ:", textResponse);
-                showToast(`ИИ не смог распознать ники на фото (Турнир ${Math.ceil(upload.globalStage / 3)}).`, 'error');
-                continue; 
-            }
-
-            if (!Array.isArray(foundNicks)) {
-                showToast('ИИ вернул не массив данных.', 'error');
+            if (parsedData.length === 0) {
+                showToast(`ИИ не нашел данных на фото для Этапа ${upload.globalStage}.`, 'info');
                 continue;
             }
 
-            if (foundNicks.length === 0) {
-                showToast(`ИИ не нашел ников на фото для Этапа ${upload.globalStage}.`, 'info');
-                continue;
-            }
-
-            totalRecognized += foundNicks.length;
+            totalRecognized += parsedData.length;
             const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
             
-            for (const rawNick of foundNicks) {
+            for (const obj of parsedData) {
+                // На всякий случай проверяем, что ИИ вернул объект с ником, а не просто строку
+                const rawNick = typeof obj === 'string' ? obj : obj.nickname;
+                if (!rawNick) continue;
+
                 const matchedPlayer = findBestPlayerMatch(rawNick, activePlayers);
                 
                 if (matchedPlayer) {
+                    // 1. Всегда ставим посещаемость "Пришел"
                     await supabaseClient.from('attendance').upsert({
                         player_id: matchedPlayer.id,
                         tournament_number: upload.globalStage,
                         status: 'Пришел',
                         season_id: seasonId
                     }, { onConflict: 'player_id, tournament_number, season_id' });
+
+                    // 2. Если есть цифры (статистика), записываем их
+                    if (typeof obj === 'object' && (obj.k > 0 || obj.d > 0 || obj.a > 0 || obj.pts > 0)) {
+                        await supabaseClient.from('match_stats').upsert({
+                            player_id: matchedPlayer.id,
+                            stage_number: upload.globalStage,
+                            kills: parseInt(obj.k) || 0,
+                            deaths: parseInt(obj.d) || 0,
+                            assists: parseInt(obj.a) || 0,
+                            points: parseInt(obj.pts) || 0,
+                            season_id: seasonId
+                        }, { onConflict: 'player_id, stage_number, season_id' });
+                        
+                        // Пересчитываем общие статы игрока
+                        await recalculatePlayerStats(matchedPlayer.id);
+                    }
                     totalSaved++;
                 }
             }
@@ -1621,13 +1648,16 @@ async function confirmPhotoUpload() {
     }
 
     if (totalRecognized > 0) {
-        showToast(`ИИ прочитал ${totalRecognized} ников. Засчитано ${totalSaved} игроков!`, 'success');
+        showToast(`ИИ прочитал ${totalRecognized} игроков. Засчитано ${totalSaved}!`, 'success');
     } else {
-        showToast(`ИИ не смог распознать ни одного ника.`, 'error');
+        showToast(`ИИ не смог распознать данные.`, 'error');
     }
     
     if (document.getElementById('tab-attendance').classList.contains('active')) {
         loadAttendance();
+    }
+    if (document.getElementById('tab-stats').classList.contains('active')) {
+        loadMatchStats();
     }
 }
 
