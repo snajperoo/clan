@@ -656,7 +656,7 @@ async function loadMyProfile(player) {
     statusEl.innerText = player.status || 'в клане';
     statusEl.style.color = player.status === 'кикнут' ? 'var(--danger-color)' : (player.status === 'в обработке' ? 'var(--accent-color)' : 'var(--success-color)');
 
-    // Гильзы
+    // Гильзы (в профиле)
     let qMatches = supabaseClient.from('clan_matches').select('*').order('stage_number', { ascending: true, nullsFirst: false });
     qMatches = filterBySeason(qMatches);
     const { data: matches } = await qMatches;
@@ -667,17 +667,16 @@ async function loadMyProfile(player) {
         matches.forEach(match => {
             const cScore = match.clan_score || 0, eScore = match.enemy_points || 0;
             const currentTier = getTierData(totalRating);
-            let gears = match.gears_earned !== null && match.gears_earned !== undefined ? match.gears_earned : 0;
             
-            if (match.gears_earned === null || match.gears_earned === undefined) {
-                if (cScore > eScore) gears = currentTier.winGears;
-                else if (cScore < eScore && cScore >= (eScore * 0.2)) gears = currentTier.lossGears;
+            if (match.gears_earned !== null && match.gears_earned !== undefined) {
+                totalGears += match.gears_earned;
+            } else {
+                if (cScore > eScore) totalGears += currentTier.winGears;
+                else if (cScore < eScore && cScore >= (eScore * 0.2)) totalGears += currentTier.lossGears;
             }
-            
+
             if (cScore > eScore) { totalRating += 50; }
             else if (cScore < eScore) { totalRating -= 50; }
-            
-            totalGears += gears;
         });
     }
     document.getElementById('my-gears').innerText = totalGears;
@@ -1061,16 +1060,25 @@ async function loadMatchHistory() {
         return;
     }
 
+    // ИСПРАВЛЕННЫЙ ПОДСЧЕТ ГИЛЬЗ
     matches.forEach(match => {
         const cScore = match.clan_score || 0, eScore = match.enemy_points || 0;
         const currentTier = getTierData(totalRating);
 
+        if (match.gears_earned !== null && match.gears_earned !== undefined) {
+            totalGears += match.gears_earned;
+        } else {
+            if (cScore > eScore) {
+                totalGears += currentTier.winGears;
+            } else if (cScore < eScore) {
+                if (cScore >= (eScore * 0.2)) totalGears += currentTier.lossGears;
+            }
+        }
+
         if (cScore > eScore) {
-            totalGears += currentTier.winGears;
             totalRating += 50;
             wins++;
         } else if (cScore < eScore) {
-            if (cScore >= (eScore * 0.2)) totalGears += currentTier.lossGears;
             totalRating -= 50;
             losses++;
         } else {
