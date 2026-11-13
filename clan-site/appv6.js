@@ -1,5 +1,7 @@
 const SUPABASE_URL = 'https://rpqiapddvlkdecddczqx.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_hDt4D6V24JeooGxNoLN4rQ__YFppVSz'; 
+const GEMINI_API_KEY = 'AQ.Ab8RN6IdO4AWRFat5cUf4ZitQBbp2O8_kLgBcI13ej-6QqoUAw'; 
+
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -41,6 +43,59 @@ function getTierData(rating) {
     for (let t of TIER_SETTINGS) { if (rating >= t.minRating) current = t; }
     return current;
 }
+
+// ==================== УМНЫЙ ПОИСК НИКОВ (FUZZY MATCHING) ====================
+// Вычисляет "расстояние" между строками (сколько букв нужно поменять)
+function levenshteinDistance(a, b) {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // замена
+                    Math.min(matrix[i][j - 1] + 1, // вставка
+                    matrix[i - 1][j] + 1) // удаление
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
+function findBestPlayerMatch(recognizedNick, playersList) {
+    let bestPlayer = null;
+    let minDistance = 999;
+    const normRec = recognizedNick.toLowerCase().replace(/[^a-zа-я0-9_]/g, '');
+
+    for (const p of playersList) {
+        const normDb = p.nickname.toLowerCase().replace(/[^a-zа-я0-9_]/g, '');
+        
+        // 1. Точное совпадение (после очистки от спецсимволов)
+        if (normRec === normDb) return p;
+
+        // 2. Частичное совпадение (например, ИИ прочитал "Скорп", а в базе "Скорпион")
+        if (normDb.includes(normRec) || normRec.includes(normDb)) {
+            if (Math.abs(normRec.length - normDb.length) <= 3) return p;
+        }
+
+        // 3. Расстояние Левенштейна (поиск опечаток ИИ)
+        const dist = levenshteinDistance(normRec, normDb);
+        const maxAllowedDist = Math.floor(normDb.length / 3) + 1; // Допускаем 1-2 ошибки в зависимости от длины
+
+        if (dist < minDistance && dist <= maxAllowedDist) {
+            minDistance = dist;
+            bestPlayer = p;
+        }
+    }
+    return bestPlayer; // Вернет null, если вообще ничего похожего нет
+}
+// =======================================================================
 
 // ==================== БЭКАПЫ ====================
 
@@ -668,7 +723,6 @@ async function loadAttendance() {
     let max = 3; 
     if (a && a.length > 0) { const m = Math.max(...a.map(x => x.tournament_number)); if (m > max) max = m; }
     
-    // Подтягиваем максимум из календаря
     let qCal = supabaseClient.from('clan_calendar').select('tournament_number');
     qCal = filterBySeason(qCal);
     const { data: cal } = await qCal;
@@ -696,7 +750,7 @@ async function loadAttendance() {
         const content = document.createElement('div'); content.className = 'tournament-content';
         
         let tableHtml = `<table class="attendance-table"><thead><tr><th>Боец</th>`;
-        for (let st = 1; st <= 3; st++) tableHtml += `<th>ЭТАП ${(t-1)*3 + st}</th>`;
+        for (let st = 1; st <= 3; st++) tableHtml += `<th>ЭТАП ${st}</th>`;
         tableHtml += `</tr></thead><tbody>`;
         
         const searchQuery = document.getElementById('attendance-search').value.toLowerCase().trim();
@@ -814,7 +868,6 @@ async function loadMatchStats() {
     let max = 3; 
     if (s && s.length > 0) { const m = Math.max(...s.map(x => x.stage_number)); if (m > max) max = m; }
     
-    // Подтягиваем максимум из календаря
     let qCal = supabaseClient.from('clan_calendar').select('tournament_number');
     qCal = filterBySeason(qCal);
     const { data: cal } = await qCal;
@@ -832,7 +885,7 @@ async function loadMatchStats() {
         const content = document.createElement('div'); content.className = 'tournament-content';
         
         let tableHtml = `<table class="stats-table"><thead><tr><th rowspan="2" style="vertical-align:middle;">Боец</th>`;
-        for (let st = 1; st <= 3; st++) tableHtml += `<th colspan="4">ЭТАП ${(t-1)*3 + st}</th>`;
+        for (let st = 1; st <= 3; st++) tableHtml += `<th colspan="4">ЭТАП ${st}</th>`;
         tableHtml += `</tr><tr>`;
         for (let st = 1; st <= 3; st++) tableHtml += `<th>K</th><th>D</th><th>A</th><th>PTS</th>`;
         tableHtml += `</tr></thead><tbody>`;
@@ -1069,6 +1122,7 @@ function renderHistoryChart(wins, losses, draws = 0) {
     });
 }
 
+// ==================== КАЛЕНДАРЬ (ПОЧИНЕН) ====================
 async function loadCalendar() {
     const list = document.getElementById('calendar-list'); if (!list) return; list.innerHTML = 'Загрузка...';
     const { data: events, error } = await supabaseClient.from('clan_calendar').select('*').order('match_date', { ascending: true }).order('tournament_number', { ascending: true });
@@ -1080,15 +1134,26 @@ async function loadCalendar() {
     if (bulkInput) bulkInput.value = (Math.ceil(maxStage / 3) || 0) + 1;
 
     const showPast = document.getElementById('show-past-calendar')?.checked || false;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
     const filteredEvents = (events || []).filter(e => {
         const seasonMatch = activeSeasonId === 'all' || Number(e.season_id) === Number(activeSeasonId);
-        const dateMatch = showPast || e.match_date >= todayStr;
-        return seasonMatch && dateMatch;
+        if (!seasonMatch) return false;
+        if (showPast) return true;
+        if (e.match_date < todayStr) return false;
+        if (e.match_date === todayStr && e.match_time) {
+            const eventDateTime = new Date(`${e.match_date}T${e.match_time}`);
+            const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+            if (eventDateTime < threeHoursAgo) return false;
+        }
+        return true;
     });
 
-    if (filteredEvents.length === 0) { list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет предстоящих турниров</div>'; return; }
+    if (filteredEvents.length === 0) { 
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Нет предстоящих турниров</div>'; 
+        return; 
+    }
     
     const grouped = {};
     filteredEvents.forEach(e => {
@@ -1107,12 +1172,32 @@ async function loadCalendar() {
 
         list.innerHTML += `
         <div class="calendar-card" style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; padding:15px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:4px; opacity:${opacity};">
-            <div><div style="color:var(--accent-color); font-weight:bold; font-size:1.1em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''} ${pastTag}</div>
-            <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${g.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
-            <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${g.notes || ''}</div></div>
-            ${isAdmin ? `<button class="btn btn-danger" style="padding: 6px 12px;" onclick="deleteCalendarEvents([${idsStr}])">X</button>` : ''}
+            <div>
+                <div style="color:var(--accent-color); font-weight:bold; font-size:1.1em;">${dateStr} ${timeStr ? 'в ' + timeStr : ''} ${pastTag}</div>
+                <div style="font-size:0.9em; margin-top:5px;">Турнир: <strong>${g.tourney || '-'}</strong> | Этапы: <strong>${stagesStr}</strong></div>
+                <div style="color:var(--text-muted); font-size:0.9em; margin-top:5px;">${g.notes || ''}</div>
+            </div>
+            ${isAdmin ? `
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn" style="background:var(--accent-color); color:#000;" onclick="moveCalendarToHistory(${g.ids[0]}, '${g.date}', ${g.tourney}, ${g.stages[0] || 1})">Провести матч</button>
+                <button class="btn btn-danger" style="padding: 6px 12px;" onclick="deleteCalendarEvents([${idsStr}])">X</button>
+            </div>` : ''}
         </div>`;
     });
+}
+
+async function moveCalendarToHistory(calId, date, tourney, stage) {
+    if (!isAdmin || !confirm('Перенести в Историю матчей? (Турнир исчезнет из календаря)')) return;
+    const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
+
+    const { error: insErr } = await supabaseClient.from('clan_matches').insert([{
+        match_date: date, clan_score: 0, enemy_points: 0, enemy_name: 'Неизвестный враг', map_name: 'Низина', stage_number: tourney || 1, season_id: seasonId
+    }]);
+
+    if (insErr) return showToast('Ошибка: ' + insErr.message, 'error');
+    await supabaseClient.from('clan_calendar').delete().eq('id', calId);
+    showToast('Турнир перенесен в Историю!', 'success');
+    loadCalendar(); loadMatchHistory();
 }
 
 async function addUpcomingMatch() {
@@ -1170,6 +1255,8 @@ async function deleteCalendarEvents(ids) {
     for (const id of ids) await supabaseClient.from('clan_calendar').delete().eq('id', id);
     loadCalendar(); showToast('Удалено', 'success');
 }
+
+// ==================== ОСТАЛЬНОЕ ====================
 
 async function loadFines() {
     const { data } = await supabaseClient.from('fines').select('*, players(nickname)').order('created_at', { ascending: false });
@@ -1280,7 +1367,7 @@ async function deletePlayerNote(noteId, playerId) {
 async function sendAnalyticsScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 async function sendRosterScreenshot() { showToast('Отправка в Discord...', 'info'); setTimeout(() => showToast('Готово!', 'success'), 1000); }
 
-// ==================== МНОЖЕСТВЕННАЯ ЗАГРУЗКА ФОТО ====================
+// ==================== РАСПОЗНАВАНИЕ ФОТО ИИ ====================
 
 function openPhotoModal(input) {
     if (!input.files || input.files.length === 0) return;
@@ -1299,7 +1386,6 @@ function openPhotoModal(input) {
         previewContainer.style.flexDirection = 'column';
         previewContainer.style.gap = '10px';
 
-        // Вычисляем максимальный турнир для выпадающего списка
         let maxTourney = Math.ceil(maxAttendanceStage / 3);
         if (maxTourney < 1) maxTourney = 1;
 
@@ -1333,7 +1419,6 @@ function openPhotoModal(input) {
             fileName.style.whiteSpace = 'nowrap';
             fileName.style.minWidth = '100px';
 
-            // Выбор ТУРНИРА
             const tourneySelect = document.createElement('select');
             tourneySelect.className = 'photo-tourney-select';
             tourneySelect.dataset.index = index;
@@ -1343,11 +1428,10 @@ function openPhotoModal(input) {
                 const opt = document.createElement('option');
                 opt.value = i;
                 opt.textContent = `Турнир ${i}`;
-                if (i === maxTourney) opt.selected = true; // По умолчанию текущий турнир
+                if (i === maxTourney) opt.selected = true; 
                 tourneySelect.appendChild(opt);
             }
 
-            // Выбор ЭТАПА
             const stageSelect = document.createElement('select');
             stageSelect.className = 'photo-stage-select';
             stageSelect.dataset.index = index;
@@ -1357,7 +1441,6 @@ function openPhotoModal(input) {
                 const opt = document.createElement('option');
                 opt.value = i;
                 opt.textContent = `Этап ${i}`;
-                // Автовыбор по порядку (1-е фото -> Этап 1, 2-е -> Этап 2)
                 if (i === index + 1 && i <= 3) opt.selected = true; 
                 stageSelect.appendChild(opt);
             }
@@ -1396,9 +1479,19 @@ function closePhotoModal() {
     }
 }
 
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = error => reject(error);
+    });
+}
+
 async function confirmPhotoUpload() {
     if (currentPhotoFiles.length === 0) return showToast('Файлы не выбраны', 'error');
-    
+    if (!GEMINI_API_KEY || GEMINI_API_KEY.trim() === '') return showToast('Ошибка: Не указан ключ Gemini в appv6.js', 'error');
+
     const tourneySelects = document.querySelectorAll('.photo-tourney-select');
     const stageSelects = document.querySelectorAll('.photo-stage-select');
     const uploads = [];
@@ -1406,20 +1499,81 @@ async function confirmPhotoUpload() {
     tourneySelects.forEach((select, index) => {
         const tourney = parseInt(select.value);
         const stage = parseInt(stageSelects[index].value);
+        const globalStage = (tourney - 1) * 3 + stage; 
+        
         if (currentPhotoFiles[index]) {
-            uploads.push({ file: currentPhotoFiles[index], tourney, stage });
+            uploads.push({ file: currentPhotoFiles[index], globalStage });
         }
     });
 
-    showToast(`Отправка ${uploads.length} фото на распознавание...`, 'info');
+    showToast(`ИИ обрабатывает ${uploads.length} фото...`, 'info');
     closePhotoModal();
-    
-    setTimeout(() => {
-        showToast(`Успешно распознано ${uploads.length} фото (демо-режим)`, 'success');
-        if (document.getElementById('tab-attendance').classList.contains('active')) {
-            loadAttendance();
+
+    let totalRecognized = 0;
+    let totalSaved = 0;
+
+    for (const upload of uploads) {
+        try {
+            const base64Data = await fileToBase64(upload.file);
+            
+            // Запрос к Google Gemini Vision
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: "Проанализируй этот скриншот игры. Найди список ников игроков. Верни ТОЛЬКО массив JSON со списком ников в формате [\"Ник1\", \"Ник2\", ...]. Никакого другого текста, без markdown разметки." },
+                            { inline_data: { mime_type: upload.file.type, data: base64Data } }
+                        ]
+                    }]
+                })
+            });
+
+            const resData = await response.json();
+            if (resData.error) throw new Error(resData.error.message);
+
+            let textResponse = resData.candidates[0].content.parts[0].text;
+            textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            let foundNicks = [];
+            try {
+                foundNicks = JSON.parse(textResponse);
+            } catch(e) {
+                console.warn("ИИ вернул не JSON:", textResponse);
+                continue; 
+            }
+
+            if (!Array.isArray(foundNicks)) continue;
+            totalRecognized += foundNicks.length;
+
+            const seasonId = (activeSeasonId === 'all' || !activeSeasonId) ? 1 : activeSeasonId;
+            
+            for (const rawNick of foundNicks) {
+                // Ищем точное или похожее совпадение
+                const matchedPlayer = findBestPlayerMatch(rawNick, activePlayers);
+                
+                if (matchedPlayer) {
+                    await supabaseClient.from('attendance').upsert({
+                        player_id: matchedPlayer.id,
+                        tournament_number: upload.globalStage,
+                        status: 'Пришел',
+                        season_id: seasonId
+                    }, { onConflict: 'player_id, tournament_number, season_id' });
+                    totalSaved++;
+                }
+            }
+        } catch (err) {
+            console.error("Ошибка распознавания:", err);
+            showToast('Ошибка ИИ: ' + err.message, 'error');
         }
-    }, 1500);
+    }
+
+    showToast(`ИИ прочитал ${totalRecognized} ников. Успешно засчитано ${totalSaved} игроков!`, 'success');
+    
+    if (document.getElementById('tab-attendance').classList.contains('active')) {
+        loadAttendance();
+    }
 }
 
 function saveAbsentStatuses() {
